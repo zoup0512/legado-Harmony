@@ -1,3 +1,4 @@
+import { common } from '@kit.AbilityKit'
 import BookMark from '../../../componets/head/BookMark'
 import { router } from '@kit.ArkUI'
 import BookBodyContent from './components/BookBodyContent'
@@ -237,14 +238,23 @@ export default struct IndexShelf {
           //   router.pushUrl({
           //     url: 'pages/view/bookShelf/LocalImportPage'
           //   });
-          let FileResult = await FileHandler.documentPickerFile(undefined, ['.txt', '.epub', '.mobi', '.azw', '.azw3'])
-          FileResult.forEach((item) => {
-            FileHandler.CopyFile(item, this.currentIndex)
-          })
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          const requestId = FileHandler.createImportRequestId()
+          const bookType = this.currentIndex
+          const FileResult = await FileHandler.documentPickerFile(context,
+            ['.txt', '.epub', '.mobi', '.azw', '.azw3'], 1, requestId)
+          if (FileResult.length === 0) {
+            return
+          }
+          let imported = false
+          for (const item of FileResult) {
+            const success = await FileHandler.CopyFile(context, item, bookType, requestId)
+            imported = imported || success
+          }
           this.isShowImport = false
-          setTimeout(() => {
+          if (imported) {
             this.isBookRefreshing++
-          }, 500)
+          }
           break
         case 1:
           // 云盘导入
@@ -260,7 +270,11 @@ export default struct IndexShelf {
           break
         case 4:
           //书单本地导入
-          let res = await FileHandler.documentPickerFile(1, ['.json'])
+          let res = await FileHandler.documentPickerFile(
+            this.getUIContext().getHostContext() as common.UIAbilityContext, ['.json'])
+          if (res.length === 0) {
+            return
+          }
           FileHandler.ReadJSONFile(res[0]).then(async result => {
             if (result.length > 0) {
               this.bookImport = JSON.parse(result) as bookShelfImport[]

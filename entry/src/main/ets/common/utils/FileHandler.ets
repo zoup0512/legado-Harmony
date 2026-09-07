@@ -9,45 +9,101 @@ import { buffer } from '@kit.ArkTS'
 import { Books } from '../../database/entities/Books';
 import booksUtil from './booksUtils';
 
-let context = getContext(this) as common.UIAbilityContext;
-let filePath = context.filesDir;
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 let options: Options = {
   encoding: 'utf-8'
 };
 
 export class FileHandler {
-  static CopyFile(srcUrl: string, currentIndex: number) {
-    let file = fs.openSync(srcUrl, fs.OpenMode.READ_WRITE);
-    let dstPath = filePath + '/' + file.name; // file.name:《幽影之冰》.txt
-    let book: Books = {
-      bookName: file.name,
-      bookUrl: dstPath,
-      author: '暂无',
-      bookGroup: 4,
-      latestChapterTime: 0,
-      totalChapterNum: 0,
-      durChapterIndex: 0,
-      durChapterPos: 0,
-      durChapterTime: 0,
-      canUpdate: false,
-      sort: 0,
-      originOrder: 0,
-      syncTime: 0,
-      bookType: currentIndex,
-      isTop: false,
-      isJoin: true,
-      isLocalBook: true
+  static createImportRequestId(): string {
+    return util.generateRandomUUID();
+  }
+
+  // Never log arbitrary platform messages: they can contain paths or document names.
+  private static logImportError(requestId: string, stage: string, error: BusinessError) {
+    const message = error.message ?? '';
+    let safeMessage = '[redacted]';
+    if (message === 'Parameter error.' || message === 'Permission denied.' ||
+      message === 'Operation canceled.' || message === 'Operation cancelled.') {
+      safeMessage = message;
     }
-    booksUtil.addBooks(book)
-    showMessage('添加到书架成功')
-    fs.copyFile(file.fd, dstPath, 0).then(() => {
-      showMessage('导入沙箱成功')
-      console.info("copy file success");
-    }).catch((err: BusinessError) => {
-      showMessage('导入失败')
-      console.error("copy file failed with error message: " + err.message + ", error code: " + err.code);
-    });
+    hilog.error(0x0000, 'LocalImport',
+      'request=%{public}s stage=%{public}s code=%{public}s message=%{public}s messageLength=%{public}d',
+      requestId, stage, String(error.code ?? 'unknown'), safeMessage, message.length);
+  }
+
+  private static uriSummary(uri: string): string {
+    const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/([^/?#]*)/.exec(uri);
+    const scheme = match && ['file', 'content', 'datashare'].includes(match[1]) ? match[1] : 'other';
+    const authority = match ? match[2] : '';
+    // Only known system providers are public; arbitrary authorities may contain personal data.
+    const provider = ['docs', 'media', 'com.ohos.UserFile.ExternalFileManager'].includes(authority) ?
+      authority : 'other';
+    return `scheme=${scheme} provider=${provider} uriLength=${uri.length}`;
+  }
+
+  static async CopyFile(context: common.UIAbilityContext, srcUrl: string, currentIndex: number,
+    requestId: string = FileHandler.createImportRequestId()): Promise<boolean> {
+    let stage = 'copy.context';
+    const started = Date.now();
+    hilog.info(0x0000, 'LocalImport',
+      'request=%{public}s stage=copy.start contextAvailable=%{public}s %{public}s',
+      requestId, String(!!context), FileHandler.uriSummary(srcUrl));
+    try {
+      if (!context || !context.filesDir) {
+        throw new Error('Import context unavailable');
+      }
+      if (!srcUrl) {
+        hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=copy.empty', requestId);
+        return false;
+      }
+      stage = 'copy.open';
+      const file = fs.openSync(srcUrl, fs.OpenMode.READ_ONLY);
+      let dstPath = '';
+      let fileName = '';
+      try {
+        fileName = file.name;
+        dstPath = context.filesDir + '/' + fileName;
+        stage = 'copy.transfer';
+        await fs.copyFile(file.fd, dstPath, 0);
+      } finally {
+        fs.closeSync(file);
+      }
+      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=copy.done elapsedMs=%{public}d',
+        requestId, Date.now() - started);
+      const book: Books = {
+        bookName: fileName,
+        bookUrl: dstPath,
+        author: '暂无',
+        bookGroup: 4,
+        latestChapterTime: 0,
+        totalChapterNum: 0,
+        durChapterIndex: 0,
+        durChapterPos: 0,
+        durChapterTime: 0,
+        canUpdate: false,
+        sort: 0,
+        originOrder: 0,
+        syncTime: 0,
+        bookType: currentIndex,
+        isTop: false,
+        isJoin: true,
+        isLocalBook: true
+      };
+      stage = 'copy.bookshelf';
+      if (!await booksUtil.addBooks(book)) {
+        throw new Error('Bookshelf insert failed');
+      }
+      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=import.done elapsedMs=%{public}d',
+        requestId, Date.now() - started);
+      showMessage('导入并添加到书架成功');
+      return true;
+    } catch (error) {
+      FileHandler.logImportError(requestId, stage, error as BusinessError);
+      showMessage('本地导入失败，请查看 LocalImport 日志');
+      return false;
+    }
   }
 
   //动态获取文件大小
@@ -99,20 +155,45 @@ export class FileHandler {
     return chapters
   }
 
-  static async documentPickerFile(maxSelectNumber: number | undefined = undefined, fileSuffixFilters: Array<string>) {
-    // 尝试写一个通用的picker
+  static async documentPickerFile(context: common.UIAbilityContext, fileSuffixFilters: Array<string>,
+    maxSelectNumber: number = 1, requestId: string = FileHandler.createImportRequestId()): Promise<string[]> {
+    const started = Date.now();
+    let stage = 'picker.context';
+    hilog.info(0x0000, 'LocalImport',
+      'request=%{public}s stage=picker.request contextAvailable=%{public}s mode=FILE max=%{public}d filters=%{public}s',
+      requestId, String(!!context), maxSelectNumber, fileSuffixFilters.join(','));
     try {
+      if (!context) {
+        throw new Error('Import context unavailable');
+      }
       const documentSelectOptions = new picker.DocumentSelectOptions();
-      // 选择文档的最大数目（可选）
       documentSelectOptions.maxSelectNumber = maxSelectNumber;
-      // 选择文件的后缀类型，若选择项存在多个后缀名，则每一个后缀名之间用英文逗号进行分隔（可选），后缀类型名不能超过100
+      documentSelectOptions.selectMode = picker.DocumentSelectMode.FILE;
       documentSelectOptions.fileSuffixFilters = fileSuffixFilters;
-      let documentViewPicker = new picker.DocumentViewPicker(context);
-      const documentSelectResult: Array<string> = await documentViewPicker.select(documentSelectOptions)
-      return documentSelectResult
-    } catch (err) {
-      console.error(`读取失败：${err}`);
-      return Promise.reject(err)
+      stage = 'picker.construct';
+      const documentViewPicker = new picker.DocumentViewPicker(context);
+      stage = 'picker.select';
+      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.select.begin', requestId);
+      const result: Array<string> = await documentViewPicker.select(documentSelectOptions);
+      hilog.info(0x0000, 'LocalImport',
+        'request=%{public}s stage=picker.select.end count=%{public}d elapsedMs=%{public}d',
+        requestId, result.length, Date.now() - started);
+      if (result.length === 0) {
+        hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.cancelOrEmpty', requestId);
+      }
+      for (let index = 0; index < result.length; index++) {
+        hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.result index=%{public}d %{public}s',
+          requestId, index, FileHandler.uriSummary(result[index]));
+      }
+      return result;
+    } catch (error) {
+      const err = error as BusinessError;
+      FileHandler.logImportError(requestId, stage, err);
+      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.failed elapsedMs=%{public}d',
+        requestId, Date.now() - started);
+      // Do not guess cancellation from an undocumented error code.
+      showMessage('文件选择未完成，请查看 LocalImport 日志');
+      return [];
     }
   }
 

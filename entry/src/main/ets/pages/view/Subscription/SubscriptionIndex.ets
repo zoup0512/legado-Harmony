@@ -4,6 +4,7 @@
  * @className: Subscription
  * 新版订阅页面
  */
+import { common } from '@kit.AbilityKit'
 import CommonConstants from '../../../common/constants/CommonConstants'
 import ImageConstants from '../../../common/constants/ImageConstants'
 import PaddingConstants from '../../../common/constants/PaddingConstants'
@@ -403,7 +404,11 @@ export default struct SubscriptionIndex {
   }
 
   async localImport() {
-    let FileResult = await FileHandler.documentPickerFile(1, ['.json'])
+    let FileResult = await FileHandler.documentPickerFile(
+      this.getUIContext().getHostContext() as common.UIAbilityContext, ['.json'])
+    if (FileResult.length === 0) {
+      return
+    }
     FileHandler.ReadJSONFile(FileResult[0]).then(result => {
       // console.log('result:' + result)
       this.subscriptionList = JSON.parse(result) as rssSources[]
