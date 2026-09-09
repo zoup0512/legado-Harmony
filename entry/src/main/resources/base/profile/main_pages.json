@@ -18,6 +18,7 @@
     "pages/view/myCenter/helpCenterPage",
     "pages/view/myCenter/readStatistics",
     "pages/view/myCenter/FileManagement",
+    "pages/view/myCenter/PrivacyFolder",
     "pages/view/bookShelf/LocalImportPage",
     "pages/view/bookShelf/DownloadManagementPage",
     "pages/view/Reader/ReaderPage",
@@ -29,6 +30,8 @@
     "pages/view/Subscription/rssWebView",
     "pages/view/Find/CategoryList/Index",
     "pages/view/myCenter/MyThemeConfig",
-    "pages/view/myCenter/CreateCustomTheme"
+    "pages/view/myCenter/CreateCustomTheme",
+    "pages/view/ServerShelf/ServerShelfPage",
+    "pages/view/ServerShelf/ServerReaderPage"
   ]
 }

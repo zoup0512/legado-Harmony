@@ -12,6 +12,7 @@ import { AppUtil } from '@pura/harmony-utils';
 import { WindowAbility } from './WindowAbility';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import BrightnessUtil from '../../common/utils/BrightnessUtil';
+import privacySessionService from '../privacy/PrivacySessionService';
 
 export default class EntryAbility extends UIAbility {
   private curBp: string = ''
@@ -153,12 +154,13 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground() {
-    // Ability has brought to foreground
+    // Privacy sessions never survive a background transition.
+    privacySessionService.lock();
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onForeground');
   }
 
   onBackground() {
-    // Ability has back to background
+    privacySessionService.lock();
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onBackground');
   }
 }

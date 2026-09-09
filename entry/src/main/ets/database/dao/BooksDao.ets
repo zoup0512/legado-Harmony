@@ -38,11 +38,15 @@ class BooksDao {
       let sql = `SELECT * FROM ${this.TABLE_NAME}`;
       // 动态添加 WHERE 子句
       let whereClause: string[] = [];
+      // Group 99 is reserved for the privacy folder and must stay out of normal queries.
+      if (bookGroup !== 99) {
+        whereClause.push(`bookGroup != 99`);
+      }
       if (type !== undefined) {
         whereClause.push(`bookType = ${type}`);
       }
       if (bookGroup !== undefined && bookGroup !== 2) {
-        whereClause.push(`bookGroup = ${bookGroup}`);
+        whereClause.push(bookGroup === 4 ? `(bookGroup = 4 OR isLocalBook = ${true})` : `bookGroup = ${bookGroup}`);
       }
       if (searchKey) {
         whereClause.push(`(
@@ -89,8 +93,11 @@ class BooksDao {
     try {
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
-      predicates.equalTo('bookType', type)
-      if (bookGroup !== undefined && bookGroup !== 2) {
+      if (type !== undefined) predicates.equalTo('bookType', type)
+      if (bookGroup !== 99) predicates.notEqualTo('bookGroup', 99)
+      if (bookGroup === 4) {
+        predicates.beginWrap().equalTo('bookGroup', 4).or().equalTo('isLocalBook', true).endWrap()
+      } else if (bookGroup !== undefined && bookGroup !== 2) {
         predicates.equalTo('bookGroup', bookGroup)
       }
       const count = await DbUtil.queryForCount(predicates, column)
@@ -119,9 +126,12 @@ class BooksDao {
       if (type !== undefined) {
         whereClause.push(`bookType = ${type}`);
       }
+      if (bookGroup !== 99) {
+        whereClause.push(`bookGroup != 99`);
+      }
       if (bookGroup !== undefined && bookGroup !== 2) {
         if (bookGroup === 4) {
-          whereClause.push(`bookGroup = ${bookGroup} or isLocalBook = ${true}`);
+          whereClause.push(`(bookGroup = ${bookGroup} OR isLocalBook = ${true})`);
         } else {
           whereClause.push(`bookGroup = ${bookGroup}`);
         }
@@ -262,11 +272,15 @@ class BooksDao {
       predicates.in('id', validIds)
       const count = await DbUtil.queryForList<Books>(predicates, column)
       if (count.length > 0) {
-        count.forEach(async (item) => {
-          item.bookGroup = groupId
-          await this.update(item)
-        })
-        return true
+        let success = count.length === new Set(validIds).size;
+        for (const item of count) {
+          item.bookGroup = groupId;
+          const updatePredicates = DbUtil.getPredicates(this.TABLE_NAME);
+          updatePredicates.equalTo('id', item.id);
+          const updated = await DbUtil.update(updatePredicates, item, column);
+          if (updated !== 1) success = false;
+        }
+        return success;
       }
       return false
     } catch (err) {
@@ -412,7 +426,8 @@ class BooksDao {
       if (validIds.length === 0) return []
       // 创建查询条件，查找所有给定的 id
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
-      predicates.in('id', validIds);  // 使用 in 条件一次性查找多个 id
+      predicates.in('id', validIds);
+      predicates.notEqualTo('bookGroup', 99);  // 使用 in 条件一次性查找多个 id
 
       // 执行一次查询获取所有匹配的书籍
       const books = await DbUtil.queryForList<Books>(predicates, column);

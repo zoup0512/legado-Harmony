@@ -287,6 +287,13 @@ export default struct IndexShelf {
             this.isBookRefreshing++
           }, 500)
           break
+        case 5:
+          // 服务器书架：在线阅读 reader-dev 服务器上的书
+          this.isShowImport = false
+          router.pushUrl({
+            url: 'pages/view/ServerShelf/ServerShelfPage'
+          })
+          break
       }
     })
   }
@@ -308,6 +315,10 @@ export default struct IndexShelf {
 
         GridCol() {
           this.ImportClickBox(2, "app.media.official_website", "网址导入")
+        }
+
+        GridCol() {
+          this.ImportClickBox(5, "app.media.my_center_cloud_icon", "服务器书架")
         }
       }
       .height("60%")

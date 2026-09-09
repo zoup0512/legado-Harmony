@@ -20,6 +20,8 @@ import { WorksLists } from '../../../../database/entities/WorksLists';
 import worksListsUtils from '../../../../common/utils/WorksListsUtils';
 import { ThemeItem } from '../../../../common/model/Theme';
 import { ThemeStorageKey } from '../../../../common/constants/Theme';
+import privacyFolderService from '../../../../privacy/PrivacyFolderService';
+import privacySessionService from '../../../../privacy/PrivacySessionService';
 
 class routerParams {
   currentIndex:number
@@ -349,12 +351,14 @@ struct BookManagePage {
     new buttonList(1,'置顶',$r('app.media.top')),
     new buttonList(2,'移动至',$r('app.media.folder')),
     new buttonList(3,'加入书单',$r('app.media.shelf')),
-    new buttonList(5,'删除',$r('app.media.ic_public_delete'))
+    new buttonList(5,'删除',$r('app.media.ic_public_delete')),
+    new buttonList(6,'隐私文件夹',$r('app.media.hide'))
   ]
   //底部操作栏
   @Builder footerTitle(){
       GridRow({
-        columns:this.bookTypeNumber===1?5:4
+        columns:this.bookTypeNumber===1?5:3,
+        gutter: { y: 12 }
       }){
         ForEach(this.bookTypeNumber===1?this.buttonListInfo5:this.buttonListInfo4,(item:buttonList)=>{
           GridCol(){
@@ -390,11 +394,12 @@ struct BookManagePage {
     }
   //底部操作栏功能
   bookInfoButton(index:number){
+    if (this.privacyBusy) return;
+    this.dataCheckList()
     if (this.checkListNumber.length <= 0) {
       showMessage('请选择要操作的内容');
       return
     }
-    this.dataCheckList()
     switch (index){
       case 1 :
        this.manageTop(); break;
@@ -413,8 +418,59 @@ struct BookManagePage {
         break
       case 5 :
         this.delDialog?.open(); break;
+      case 6 :
+        this.confirmMoveToPrivacy(); break;
     }
   }
+  @State privacyBusy: boolean = false
+
+  confirmMoveToPrivacy() {
+    if (this.bookTypeNumber === 1 || this.bookTypeNumber === 5) {
+      showMessage('分组和书单不能移入隐私文件夹');
+      return;
+    }
+    const ids = this.checkListNumber.slice();
+    const selected = this.bookList.filter(book => book.id !== undefined && ids.includes(book.id));
+    if (selected.length !== ids.length || selected.some(book => !book.isLocalBook)) {
+      showMessage('仅支持移入本地书籍，请取消选择非本地书籍');
+      return;
+    }
+    this.privacyBusy = true;
+    AlertDialog.show({
+      title: '移入隐私文件夹',
+      message: `确定移入选中的 ${selected.length} 本本地书籍？目前仅在应用内隐藏分组，不是加密，也不提供系统身份认证。原文件和缓存不会删除。`,
+      autoCancel: false,
+      primaryButton: { value: '取消', action: () => { this.privacyBusy = false; } },
+      secondaryButton: { value: '确认移入', action: () => { this.moveToPrivacy(selected); } },
+      cancel: () => { this.privacyBusy = false; }
+    });
+  }
+
+  async moveToPrivacy(selected: Books[]) {
+    let success = 0;
+    let failed = 0;
+    try {
+      if (!await privacySessionService.unlock()) return;
+      for (const book of selected) {
+        try {
+          if (await privacyFolderService.moveIn(book)) success++;
+          else failed++;
+        } catch (_) {
+          failed++;
+        }
+      }
+      this.checkListNumber = [];
+      this.checkLists = {};
+      this.allCheck = false;
+      this.topTitle = '置顶';
+      this.bookList = await booksDao.searchPage({ type: this.currentIndex, bookGroup: this.bookTypeNumber }, 1, 100);
+      this.isBookRefreshing++;
+      showMessage(`移入成功 ${success} 本，失败 ${failed} 本`);
+    } finally {
+      this.privacyBusy = false;
+    }
+  }
+
   //置顶功能
   manageTop(){
     if(this.bookTypeNumber === 1){

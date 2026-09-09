@@ -32,6 +32,7 @@ export default struct MyCenter {
     new dataItem("关于我们", 2, $r("app.media.my_center_about_icon")),
     new dataItem("清理缓存", 3, $r("app.media.my_center_clean_icon")),
     new dataItem("文件管理", 4, $r("app.media.my_center_file_icon")),
+    new dataItem("隐私文件夹", 5, $r("app.media.my_center_file_icon")),
   ]
   @StorageLink('topRectHeight') topRectHeight: number = 0
   Column = new ColumnModifier()
@@ -252,7 +253,11 @@ export default struct MyCenter {
         })
         break;
       case 4:
-
+        router.pushUrl({ url: 'pages/view/myCenter/FileManagement' })
+        break;
+      case 5:
+        router.pushUrl({ url: 'pages/view/myCenter/PrivacyFolder' })
+        break;
     }
   }
 
