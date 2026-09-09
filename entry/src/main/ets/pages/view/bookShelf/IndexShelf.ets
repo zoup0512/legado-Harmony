@@ -303,7 +303,7 @@ export default struct IndexShelf {
   ImportDialog() {
     Column() {
       GridRow({
-        columns: 3
+        columns: 4
       }) {
         GridCol() {
           this.ImportClickBox(0, "app.media.my_center_file_icon", "本地导入")

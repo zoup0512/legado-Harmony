@@ -414,6 +414,19 @@ class BooksDao {
     }
   }
 
+  //服务器书架同步的书（origin = server-shelf；不过滤分组，避免隐私分组(99)的书被同步逻辑误判为不存在而重复插入）
+  async getServerShelfBooks(): Promise<Books[]> {
+    try {
+      const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
+      const sql = `SELECT * FROM ${this.TABLE_NAME} WHERE origin = 'server-shelf'`;
+      const books = await DbUtil.querySqlForList<Books>(sql, column);
+      return books || [];
+    } catch (err) {
+      console.error('getServerShelfBooks, Error:', err);
+      return [];
+    }
+  }
+
 
   //根据书籍Id获取书籍
   async getBookByIds(ids: number[]) {

@@ -38,6 +38,8 @@ struct ServerShelfPage {
     this.loading = true;
     try {
       this.books = await ServerApi.getBookshelf();
+      // 同步到本地书架（origin=server-shelf，书架可见；失败静默下次再试）
+      ServerApi.syncToShelf(this.books);
     } catch (e) {
       showMessage('获取书架失败：' + (e instanceof Error ? e.message : '网络错误'));
     } finally {
@@ -231,6 +233,7 @@ struct ServerShelfPage {
       Column() {
         this.headerBar()
       }
+      .padding({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight })
       .linearGradient({
         direction: GradientDirection.Bottom,
         colors: [[this.theme.mainColor, 0], [this.theme.secondColor, 0.2]]

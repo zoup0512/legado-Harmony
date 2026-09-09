@@ -20,9 +20,18 @@ export default struct PrivacyFolder {
   }
 
   async unlock() {
-    if (await privacySessionService.unlock()) {
-      this.unlocked = true;
-      await this.loadBooks();
+    if (this.busy || privacySessionService.isAuthenticating()) return;
+    this.busy = true;
+    try {
+      const success = await privacySessionService.unlock();
+      if (success) {
+        this.unlocked = true;
+        await this.loadBooks();
+      } else {
+        promptAction.showToast({ message: privacySessionService.getLastFailureMessage() || '认证失败，请重试' });
+      }
+    } finally {
+      this.busy = false;
     }
   }
 
@@ -46,7 +55,7 @@ export default struct PrivacyFolder {
           Text('🔒').fontSize(56);
           Text('私人阅读，独立保存').fontSize(20).fontWeight(FontWeight.Medium);
           Text('解锁后查看你的私密书籍与文稿').fontSize(14).fontColor('#777777');
-          Button('解锁').width('70%').onClick(() => this.unlock());
+          Button(this.busy ? '认证中…' : '解锁').width('70%').enabled(!this.busy).onClick(() => this.unlock());
           Text('仅保护应用内副本，系统目录中的原文件不会被删除')
             .fontSize(12).fontColor('#999999').textAlign(TextAlign.Center);
         }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center);

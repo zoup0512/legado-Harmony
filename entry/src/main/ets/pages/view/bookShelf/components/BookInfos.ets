@@ -2,6 +2,7 @@ import { Books } from '../../../../database/entities/Books'
 import { router } from '@kit.ArkUI'
 import BookInfoDialogs from './dialog/BookInfoDialogs'
 import FontConstants from '../../../../common/constants/FontConstants'
+import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../common/utils/ServerApi'
 
 @Component
   /**
@@ -90,6 +91,14 @@ export default struct BookInfos {
         }.alignItems(HorizontalAlign.Start)
       }
     }.onClick(() => { // todo: 暂时屏蔽书籍详情页
+      // 服务器书架的书 → 在线阅读器（按章拉服务器正文）
+      if (this.book.origin === SERVER_SHELF_ORIGIN) {
+        router.pushUrl({
+          url: 'pages/view/ServerShelf/ServerReaderPage',
+          params: { book: ServerApi.toServerBook(this.book) }
+        })
+        return
+      }
       router.pushUrl({
         url: 'pages/view/Reader/ReaderPage3', params: { bookData: this.book }
       })

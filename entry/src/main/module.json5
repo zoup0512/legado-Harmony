@@ -6,6 +6,12 @@
     "mainElement": "EntryAbility",
     "requestPermissions":[
       {
+        "name" : "ohos.permission.ACCESS_BIOMETRIC",
+        "usedScene": {
+          "when":"inuse"
+        }
+      },
+      {
         "name" : "ohos.permission.INTERNET",
         "usedScene": {
           "when":"inuse"

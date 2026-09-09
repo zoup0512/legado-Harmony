@@ -13,6 +13,7 @@ import ServerApi, { ServerBook, ServerChapter } from '../../../common/utils/Serv
 import bookDataPreferences from '../../../common/utils/DataPreferencesUtils';
 import { chaptersItem } from '../../../componets/dataList/ReaderChaptersItem';
 import { TxtContentHandler } from '../../../componets/Reader/TxtContentHandler';
+import BooksDao from '../../../database/dao/BooksDao';
 
 interface ReaderParams {
   book: ServerBook
@@ -121,6 +122,24 @@ struct ServerReaderPage {
   saveProgress(index: number) {
     bookDataPreferences.shared.set(this.progressKey(), index);
     ServerApi.saveBookProgress(this.book, index, this.toc[index].title);
+    this.updateShelfRow(index);
+  }
+
+  // 回写本地书架行（书架显示已读章节/最近阅读排序）；书不在书架时静默跳过
+  private async updateShelfRow(index: number) {
+    try {
+      const rows = await BooksDao.isExistBooks(this.book.bookUrl, this.book.name);
+      if (rows.length > 0 && rows[0].id !== undefined) {
+        const row = rows[0];
+        row.durChapterIndex = index;
+        row.durChapterTitle = this.toc[index].title;
+        row.durChapterTime = Date.now();
+        row.totalChapterNum = this.chapters.length;
+        await BooksDao.partialUpdate(row);
+      }
+    } catch (e) {
+      console.log('updateShelfRow failed: ' + JSON.stringify(e));
+    }
   }
 
   prevChapter() {
@@ -164,7 +183,10 @@ struct ServerReaderPage {
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 12, bottom: 12 })
+    .padding({
+      top: this.topRectHeight === 0 ? 36 : this.topRectHeight + 12,
+      left: 20, right: 20, bottom: 12
+    })
     .backgroundColor(Color.White)
   }
 
