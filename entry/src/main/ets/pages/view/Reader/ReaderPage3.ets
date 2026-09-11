@@ -13,6 +13,7 @@ import { Books } from '../../../database/entities/Books';
 import { WindowAbility } from '../../../entryability/WindowAbility';
 import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
 import BrightnessUtil from '../../../../common/utils/BrightnessUtil';
+import fs from '@ohos.file.fs';
 
 interface ParamsObj {
   bookData: Books,
@@ -71,6 +72,8 @@ struct ReaderPage3 {
   private screenDensityCallBack: Callback<number> | null = null;
   private BookHandler: bookParser.BookParserHandler | null = null;
   private scrollerForList: ListScroller = new ListScroller();
+  @State readerLoading: boolean = true
+  @State readerError: string = ''
   @State themeList: themeItem[] = [
     { fontColor: '#000000', themeColor: '#FFFFFF', themeBgImg: '' },
     { fontColor: '#000000', themeColor: '#c6b6a4', themeBgImg: '' },
@@ -90,31 +93,67 @@ struct ReaderPage3 {
     this.registerListener();
     //  进入阅读页面后隐藏系统状态栏
     WindowAbility.getInstance().toggleWindowSystemBar([], this.getUIContext().getHostContext());
-    let temp = router.getParams() as ParamsObj
+    const temp = router.getParams() as ParamsObj
+    if (!temp || !temp.bookData) {
+      this.readerLoading = false
+      this.readerError = '书籍参数无效'
+      return
+    }
     this.bookData = temp.bookData
-    this.bookData = PreferencesUtil.getSync(`BookCurrentData_${this.bookData.bookName}`, this.bookData) as Books
+    const savedBook = PreferencesUtil.getSync(`BookCurrentData_${this.bookData.bookName}`, null) as Books | null
+    const currentBookUrl = this.bookData.serverBookUrl ?? this.bookData.bookUrl
+    const savedBookUrl = savedBook?.serverBookUrl ?? savedBook?.bookUrl
+    if (savedBook?.localBookDurChapterPos && currentBookUrl && savedBookUrl === currentBookUrl) {
+      this.bookData.localBookDurChapterPos = savedBook.localBookDurChapterPos
+      this.bookData.durChapterIndex = savedBook.durChapterIndex ?? this.bookData.durChapterIndex
+      this.bookData.durChapterTitle = savedBook.durChapterTitle ?? this.bookData.durChapterTitle
+    }
     this.readerSetting = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
       this.readerSetting) as readerCore.ReaderSetting;
-    this.startPlay(this.bookData.bookUrl ?? '', this.bookData.localBookDurChapterPos?.resourceIndex ?? 0,
-      this.bookData.localBookDurChapterPos?.startDomPos ?? '');
-    //修改为设置的主题，需要在初始化阅读器后设置
+    // 进入前同步日/夜模式，避免初始化后再翻转主题造成闪屏；
+    // colorModeChange 已有 BookHandler 就绪保护，不会提前调用 setPageConfig
     this.colorMode = this.readerSetting.nightMode ? 0 : 1
+    await this.startPlay(this.bookData.bookUrl ?? '', this.bookData.localBookDurChapterPos?.resourceIndex ?? 0,
+      this.bookData.localBookDurChapterPos?.startDomPos ?? '');
   }
 
   private async startPlay(path: string, resourceIndex: number, domPos: string) {
+    this.readerLoading = true
+    this.readerError = ''
     try {
-      let context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      let initPromise: Promise<void> = this.readerComponentController.init(context);
-      let defaultHandler: Promise<bookParser.BookParserHandler> = bookParser.getDefaultHandler(path);
-      let result: [bookParser.BookParserHandler, void] = await Promise.all([defaultHandler, initPromise]);
+      if (!path || path.startsWith('local://') || !fs.accessSync(path)) {
+        throw new Error('本地书籍文件不存在，请重新下载')
+      }
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const initPromise: Promise<void> = this.readerComponentController.init(context);
+      const defaultHandler: Promise<bookParser.BookParserHandler> = bookParser.getDefaultHandler(path);
+      const result: [bookParser.BookParserHandler, void] = await Promise.all([defaultHandler, initPromise]);
       this.BookHandler = result[0];
+      const catalog = this.BookHandler.getCatalogList() || []
+      if (catalog.length === 0) {
+        throw new Error('书籍内容为空或格式不受支持')
+      }
+      this.CatalogList.clear()
+      this.CatalogList.pushAllData(catalog)
+      const safeIndex = Math.max(0, Math.min(resourceIndex || 0, catalog.length - 1))
+      this.bookData.durChapterIndex = safeIndex
       this.readerComponentController.registerBookParser(this.BookHandler);
       this.readerComponentController.setPageConfig(this.readerSetting);
-      this.readerComponentController.startPlay(resourceIndex || 0, domPos);
-      this.CatalogList.pushAllData(this.BookHandler?.getCatalogList() || []); //获取目录列表
+      this.readerComponentController.startPlay(safeIndex, domPos);
       hilog.info(0x0000, 'testTag', 'catalog list length: ' + this.CatalogList.totalCount());
     } catch (err) {
-      hilog.error(0x0000, 'testTag', `failed to startPlay, Code is ${err.code}, message is ${err.message}`);
+      const message = err instanceof Error ? err.message : '书籍加载失败'
+      this.readerError = message
+      hilog.error(0x0000, 'testTag', `failed to startPlay: ${message}`);
+    } finally {
+      if (this.readerError.length > 0) {
+        this.readerLoading = false
+      } else {
+        // 正常路径等 pageShow 首帧回调撤加载层；3 秒兜底防止事件缺失卡在加载页
+        setTimeout(() => {
+          this.readerLoading = false
+        }, 3000)
+      }
     }
   }
 
@@ -131,7 +170,9 @@ struct ReaderPage3 {
       this.readerSetting.fontColor = '#000000';
       this.readerSetting.themeColor = '#FFFFFF';
     }
-    this.readerComponentController.setPageConfig(this.readerSetting);
+    if (this.BookHandler) {
+      this.readerComponentController.setPageConfig(this.readerSetting);
+    }
   }
 
   /**
@@ -151,8 +192,14 @@ struct ReaderPage3 {
 
   private registerListener(): void {
     this.readerComponentController.on('pageShow', (data: readerCore.PageDataInfo): void => {
+      // 首帧真正渲染完成才撤加载层，避免提前露出未绘制画布造成闪屏
+      this.readerLoading = false;
       this.bookData.localBookDurChapterPos = data;
-      this.bookData.durChapterTitle = this.CatalogList.getData(this.bookData.durChapterIndex).catalogName;
+      this.bookData.durChapterIndex = data.resourceIndex ?? this.bookData.durChapterIndex
+      const currentCatalog = this.CatalogList.getData(this.bookData.durChapterIndex)
+      if (currentCatalog) {
+        this.bookData.durChapterTitle = currentCatalog.catalogName;
+      }
       this.bookData.totalChapterNum = this.CatalogList.totalCount();
       // 保存书籍数据。
       PreferencesUtil.putSync(`BookCurrentData_${this.bookData.bookName}`, this.bookData)
@@ -175,6 +222,7 @@ struct ReaderPage3 {
   }
 
   aboutToDisappear(): void {
+    WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());
     PreferencesUtil.putSync(`isScreenState`, this.isScreenState)
     display.off('change', this.screenDensityCallBack);
     this.readerComponentController.off('pageShow');
@@ -187,9 +235,47 @@ struct ReaderPage3 {
       ReadPageComponent({
         controller: this.readerComponentController,
         readerCallback: (err: BusinessError, data: readerCore.ReaderComponentController) => {
-          this.readerComponentController = data;
+          // 失败分支 data 可能为 undefined，不能覆盖已有 controller
+          if (data) {
+            this.readerComponentController = data;
+          }
+          if (err && err.code) {
+            this.readerLoading = false
+            this.readerError = err.message || '阅读器初始化失败'
+          }
         }
       }).width('100%').height('100%')
+
+      if (this.readerLoading || this.readerError.length > 0) {
+        Column({ space: 16 }) {
+          if (this.readerLoading) {
+            LoadingProgress().width(40).height(40).color(this.colorMode == 0 ? '#F8F9FA' : '#182231')
+            Text('正在加载书籍…').fontSize(14)
+              .fontColor(this.colorMode == 0 ? 'rgba(248,249,250,0.8)' : '#666666')
+          } else {
+            Text('书籍加载失败').fontSize(18).fontWeight(600)
+              .fontColor(this.colorMode == 0 ? 'rgba(248,249,250,1)' : '#182231')
+            Text(this.readerError).fontSize(14)
+              .fontColor(this.colorMode == 0 ? 'rgba(248,249,250,0.7)' : '#666666')
+              .textAlign(TextAlign.Center)
+            Button('返回书架')
+              .height(40)
+              .fontSize(14)
+              .backgroundColor(this.colorMode == 0 ? '#3A3D42' : '#F2F3F5')
+              .fontColor(this.colorMode == 0 ? 'rgba(248,249,250,1)' : '#182231')
+              .onClick(() => {
+                router.back()
+              })
+          }
+        }
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .width('100%')
+        .height('100%')
+        .padding(32)
+        // 加载层背景跟随阅读主题，避免与正文主题不一致产生闪屏
+        .backgroundColor(this.readerSetting.themeColor || '#FFFFFF')
+      }
 
       Column() {
         if (this.isShowSetting) { // 阅读器-上方弹框

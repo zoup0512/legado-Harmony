@@ -50,7 +50,10 @@ class booksUtils{
         bookType: bookType,
         isTop: false,
         isJoin: true,
-        isLocalBook: false
+        isLocalBook: false,
+        serverFileSize: 0,
+        serverFileModified: 0,
+        serverUpdateAvailable: false
       }
       BooksDao.insert(book)
     })

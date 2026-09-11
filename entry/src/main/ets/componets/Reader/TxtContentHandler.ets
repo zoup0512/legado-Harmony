@@ -3,7 +3,7 @@ import { chaptersItem } from 'ets/componets/dataList/ReaderChaptersItem';
 
 @Component
 export struct TxtContentHandler {
-  @Prop txtFile: chaptersItem[] = [];
+  @Prop @Watch('txtFileChange') txtFile: chaptersItem[] = [];
   @Prop @Watch('CurrentChaptersChange') CurrentChapters: number = 0;
   @Prop @Watch('CurrentFontSizeChange') CurrentFontSize: number = 0;
   @Prop LineHeight: number = 1.8;
@@ -12,7 +12,7 @@ export struct TxtContentHandler {
   @State ShowHeight: number = 0
   @State ShowWidth: number = 0
   @State linesPerPage: number = 0;
-  @State timer: number = 0;
+  private timer: number = 0;
   @State offsetX: number = 0;
   @State CurrentChaptersContent: Array<string> = []; // 当前章节内容
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
@@ -21,38 +21,47 @@ export struct TxtContentHandler {
 
   // 获取总页数
   GetTotalPages() {
-    return Math.floor(this.CurrentChaptersContent.length / this.linesPerPage);
+    if (this.linesPerPage <= 0) {
+      return 0;
+    }
+    return Math.ceil(this.CurrentChaptersContent.length / this.linesPerPage);
+  }
+
+  private scheduleReflow(resetPage: boolean = false) {
+    if (resetPage) {
+      this.currentPage = 0
+      this.offsetX = 0
+    }
+    clearTimeout(this.timer)
+    this.timer = setTimeout(() => {
+      if (this.ShowWidth > 0 && this.ShowHeight > 0 && this.CurrentFontSize > 0) {
+        this.wrapText(this.context, this.ShowWidth);
+      }
+    }, 50)
+  }
+
+  // 章节数组整体替换（如服务器阅读页正文异步到达）时重新排版
+  txtFileChange() {
+    this.scheduleReflow()
   }
 
   CurrentChaptersChange() {
-    clearTimeout(this.timer)
-    this.timer = setTimeout(() => {
-      this.currentPage = 0
-      this.wrapText(this.context, this.ShowWidth);
-      console.log('CurrentChapters:' + this.CurrentChapters)
-      console.log('currentPage:' + this.currentPage)
-      console.log('totalPages:' + this.GetTotalPages())
-    }, 200)
+    this.scheduleReflow(true)
   }
 
   CurrentFontSizeChange() {
-    this.drawPage()
-    clearTimeout(this.timer)
-    this.timer = setTimeout(() => {
-      this.wrapText(this.context, this.ShowWidth);
-      if (this.currentPage > this.GetTotalPages()) {
-        console.log('currentPage:' + this.currentPage)
-        this.currentPage = this.GetTotalPages()
-        this.drawPage()
-      }
-      console.log('CurrentFontSize:' + this.CurrentFontSize)
-      console.log('totalPages:' + this.GetTotalPages())
-    }, 200)
+    this.scheduleReflow()
   }
 
   drawPage() {
     this.context.font = `${vp2px(this.CurrentFontSize)}px`;
-    this.linesPerPage = Math.floor(this.ShowHeight / (this.CurrentFontSize * this.LineHeight));
+    this.linesPerPage = Math.max(1, Math.floor(this.ShowHeight / (this.CurrentFontSize * this.LineHeight)));
+    const totalPages = this.GetTotalPages()
+    if (totalPages === 0) {
+      this.currentPage = 0
+    } else if (this.currentPage >= totalPages) {
+      this.currentPage = totalPages - 1
+    }
     if (this.context) {
       this.context.clearRect(0, 0, this.ShowWidth, this.ShowHeight);
       this.context.font = `${vp2px(this.CurrentFontSize)}px`;
@@ -85,52 +94,49 @@ export struct TxtContentHandler {
     }
   }
 
-  // 当前章节内容按字分割
+  // 当前章节内容折行：先按换行分段，段内按可用宽度逐字折行
   wrapText(context: CanvasRenderingContext2D, maxWidth: number = this.ShowWidth) {
-    let content: string = this.txtFile[this.CurrentChapters].content
-    let chaptersItemLines: string[] = []
-    let currentLine: string = ''
-    let pattern = /\n/
-    let i = 1
-    while (i < content.length) {
-      let temp = content[i] + content[i+1]
-      if (!pattern.test(temp)) {
-        if (context.measureText(currentLine + ' ' + content[i]).width < Number((this.ShowWidth - 10).toFixed(0))) {
-          currentLine += content[i];
-        } else {
-          chaptersItemLines.push(currentLine);
-          currentLine = content[i];
+    const chapter = this.txtFile[this.CurrentChapters];
+    const content: string = chapter && typeof chapter.content === 'string' ? chapter.content : '';
+    const chaptersItemLines: string[] = []
+    context.font = `${vp2px(this.CurrentFontSize)}px`;
+    const limit = vp2px(Math.max(0, maxWidth - 10))
+    if (content.length > 0 && limit > 0) {
+      for (const paragraph of content.split('\n')) {
+        let currentLine: string = ''
+        for (let i = 0; i < paragraph.length; i++) {
+          const ch = paragraph[i]
+          if (currentLine.length === 0 || context.measureText(currentLine + ch).width < limit) {
+            currentLine += ch
+          } else {
+            chaptersItemLines.push(currentLine)
+            currentLine = ch
+          }
         }
-        i++
-      } else {
-        chaptersItemLines.push(currentLine);
-        i = i + 2
-        currentLine = content[i];
+        chaptersItemLines.push(currentLine)
       }
-    }
-    if (pattern.test(chaptersItemLines[chaptersItemLines.length-1])) {
-      chaptersItemLines.splice(chaptersItemLines.length - 1, 1)
     }
     this.CurrentChaptersContent = chaptersItemLines
     this.drawPage();
   }
 
+  aboutToDisappear() {
+    clearTimeout(this.timer)
+  }
+
   build() {
     Canvas(this.context)
       .width("100%")
-      .layoutWeight(1)
-      .borderWidth(1)
+      .height("100%")
+      .onReady(() => {
+        this.scheduleReflow()
+      })
       .onSizeChange((oldValue: SizeOptions, newValue: SizeOptions) => {
         this.ShowHeight = Number(newValue.height)
         this.ShowWidth = Number(newValue.width)
-        this.drawPage();
-        clearTimeout(this.timer)
-        this.timer = setTimeout(() => {
-          this.wrapText(this.context, this.ShowWidth);
-        }, 100)
+        this.scheduleReflow()
         console.log('ShowHeight:' + this.ShowHeight)
         console.log('ShowWidth:' + this.ShowWidth)
-        console.log('totalPages:' + this.GetTotalPages())
       })
       .gesture(
         PanGesture(this.panOption)
@@ -148,7 +154,7 @@ export struct TxtContentHandler {
               console.log('prevPage')
               this.offsetX = 0
               this.drawPage();
-            } else if (event.offsetX < -200 && this.currentPage < this.GetTotalPages()) {
+            } else if (event.offsetX < -200 && this.currentPage + 1 < this.GetTotalPages()) {
               this.currentPage++;
               console.log('nextPage')
               this.offsetX = 0

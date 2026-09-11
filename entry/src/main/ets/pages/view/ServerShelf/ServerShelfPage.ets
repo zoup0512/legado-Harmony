@@ -1,14 +1,17 @@
 /**
- * 服务器书架：连接 reader-dev 服务器（网页端上传的书在此在线阅读）
+ * 服务器书架：连接 reader-dev 服务器，管理网页端上传书籍的本地缓存
  *
  * 首次进入配置服务器地址 + accessToken（格式 用户名:token，Web 端登录后获取），
- * 保存后拉取书架列表；点书进 ServerReaderPage 在线阅读。
+ * 保存后同步书架；书籍下载到设备后由本地 ReaderKit 阅读，刷新时检查远端更新。
  */
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { ThemeItem } from '../../../common/model/Theme';
 import { ThemeStorageKey } from '../../../common/constants/Theme';
 import { showMessage } from '../../../componets/common/promptShow';
 import ServerApi, { ServerBook, ServerConfig } from '../../../common/utils/ServerApi';
+import BooksDao from '../../../database/dao/BooksDao';
+import { Books } from '../../../database/entities/Books';
 
 @Entry
 @Component
@@ -22,6 +25,7 @@ struct ServerShelfPage {
   @State serverUrl: string = ''
   @State token: string = ''
   @State testing: boolean = false
+  @StorageLink('BOOK_IS_BOOK_REFRESHING') isBookRefreshing: number = 0
 
   aboutToAppear() {
     const config = ServerApi.getConfig();
@@ -37,11 +41,70 @@ struct ServerShelfPage {
   async loadShelf() {
     this.loading = true;
     try {
-      this.books = await ServerApi.getBookshelf();
-      // 同步到本地书架（origin=server-shelf，书架可见；失败静默下次再试）
-      ServerApi.syncToShelf(this.books);
+      this.books = await ServerApi.getBookshelf(true);
+      // 先完成元数据/缓存状态同步，再通知主书架重新查询
+      await ServerApi.syncToShelf(this.books);
+      this.isBookRefreshing++;
     } catch (e) {
       showMessage('获取书架失败：' + (e instanceof Error ? e.message : '网络错误'));
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private async localBook(book: ServerBook): Promise<Books> {
+    const rows = await BooksDao.getServerBookByUrl(book.bookUrl);
+    if (rows.length > 0) {
+      return rows[0];
+    }
+    throw new Error('本地书架中没有对应书籍');
+  }
+
+  async openBook(book: ServerBook) {
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const local = await this.localBook(book);
+      const hasCache = ServerApi.hasLocalCache(local);
+      const hasUpdate = await ServerApi.refreshLocalStatus(local);
+      if (hasCache && hasUpdate) {
+        AlertDialog.show({
+          title: '发现内容更新',
+          message: '服务器上的小说文件已更新，是否下载最新版？不更新也可以继续阅读本地缓存。',
+          autoCancel: true,
+          primaryButton: { value: '继续阅读', action: () => {
+            router.pushUrl({ url: 'pages/view/Reader/ReaderPage3', params: { bookData: local } });
+          } },
+          secondaryButton: { value: '下载更新', action: () => {
+            this.downloadAndRead(context, local, book);
+          } }
+        });
+        return;
+      }
+      if (hasCache && !hasUpdate) {
+        router.pushUrl({
+          url: 'pages/view/Reader/ReaderPage3',
+          params: { bookData: local }
+        });
+        return;
+      }
+      await this.downloadAndRead(context, local, book);
+    } catch (e) {
+      showMessage('下载失败：' + (e instanceof Error ? e.message : '网络错误'));
+    }
+  }
+
+  private async downloadAndRead(context: common.UIAbilityContext, local: Books, book: ServerBook) {
+    this.loading = true;
+    try {
+      const downloaded = await ServerApi.ensureLocalBook(context, local);
+      this.isBookRefreshing++;
+      showMessage('下载完成，开始阅读');
+      router.pushUrl({
+        url: 'pages/view/Reader/ReaderPage3',
+        params: { bookData: downloaded }
+      });
+    } catch (e) {
+      showMessage('下载失败：' + (e instanceof Error ? e.message : '网络错误'));
     } finally {
       this.loading = false;
     }
@@ -70,13 +133,6 @@ struct ServerShelfPage {
     } finally {
       this.testing = false;
     }
-  }
-
-  openBook(book: ServerBook) {
-    router.pushUrl({
-      url: 'pages/view/ServerShelf/ServerReaderPage',
-      params: { book: book }
-    });
   }
 
   @Builder
@@ -205,11 +261,18 @@ struct ServerShelfPage {
         Text(book.author && book.author.length > 0 ? book.author : '佚名')
           .fontSize(13)
           .fontColor('rgba(0,0,0,0.45)')
+        Text(book.downloaded
+          ? (book.updateAvailable ? '有更新，点击重新下载' : '已下载，可离线阅读')
+          : '未下载，点击下载到本地')
+          .fontSize(12)
+          .fontColor(book.updateAvailable ? '#D97706' : this.theme.mainColor)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
         Column() {
           Text(book.durChapterTitle && book.durChapterTitle.length > 0
-            ? `已读：${book.durChapterTitle}` : '开始阅读')
+            ? `已读：${book.durChapterTitle}` : '尚未阅读')
             .fontSize(12)
-            .fontColor(this.theme.mainColor)
+            .fontColor('rgba(0,0,0,0.45)')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }

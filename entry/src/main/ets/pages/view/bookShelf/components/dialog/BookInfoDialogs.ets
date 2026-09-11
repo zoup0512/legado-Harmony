@@ -10,6 +10,8 @@ import catalogAddShelf from '../../Manage/components/catalogAddShelf'
 import PaddingConstants from '../../../../../common/constants/PaddingConstants'
 import CommonConstants from '../../../../../common/constants/CommonConstants'
 import BasicDataSource from '../../../../../common/LazyIDataSource/BasicDataSource'
+import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../../common/utils/ServerApi'
+import { common } from '@kit.AbilityKit'
 
 @CustomDialog
 /**
@@ -60,7 +62,21 @@ export default struct BookInfoDialogs{
         }){
           Text('书籍详情').fontSize(12).fontWeight(400).fontColor($r('app.string.color_black_45'))
           Image($r('app.media.icon_right')).width(20).height(20).fillColor($r('app.string.color_black_45'))
-        } .onClick(()=>{
+        } .onClick(async ()=>{
+          // 服务器书不进入依赖 ReaderKit 远端 URL 的详情页，直接下载/打开本地缓存
+          if (this.bookData.origin === SERVER_SHELF_ORIGIN) {
+            try {
+              const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+              const local = await ServerApi.ensureLocalBook(context, this.bookData)
+              router.pushUrl({
+                url: 'pages/view/Reader/ReaderPage3', params: { bookData: local }
+              })
+            } catch (e) {
+              showMessage('服务器书下载失败：' + (e instanceof Error ? e.message : '网络错误'))
+            }
+            this.controller?.close()
+            return
+          }
           router.pushUrl({
             url: 'pages/view/BookDetailPage',
             params: this.bookData

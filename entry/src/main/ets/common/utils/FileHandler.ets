@@ -89,7 +89,10 @@ export class FileHandler {
         bookType: currentIndex,
         isTop: false,
         isJoin: true,
-        isLocalBook: true
+        isLocalBook: true,
+        serverFileSize: 0,
+        serverFileModified: 0,
+        serverUpdateAvailable: false
       };
       stage = 'copy.bookshelf';
       if (!await booksUtil.addBooks(book)) {

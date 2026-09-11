@@ -79,8 +79,18 @@ export class Books {
   updateTime?: number = 0
   //是否加入书架
   isJoin: boolean = false
-  //是否本地导入
+  //是否本地导入（服务器书下载到本地后同样为 true）
   isLocalBook: boolean = false
+  //服务器书的稳定远端标识（如 local://uuid），bookUrl 始终保存本地文件路径
+  serverBookUrl?: string
+  //最近一次下载时服务器原文件大小
+  serverFileSize: number = 0
+  //最近一次下载时服务器原文件修改时间
+  serverFileModified: number = 0
+  //服务器原文件名
+  serverFileName?: string
+  //服务器原文件有更新，等待重新下载
+  serverUpdateAvailable: boolean = false
   source?: BookSource
   sourceList?: BookSource[] = []
 }

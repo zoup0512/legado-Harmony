@@ -1,8 +1,10 @@
 import { Books } from '../../../../database/entities/Books'
+import { common } from '@kit.AbilityKit'
 import { router } from '@kit.ArkUI'
 import BookInfoDialogs from './dialog/BookInfoDialogs'
 import FontConstants from '../../../../common/constants/FontConstants'
 import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../common/utils/ServerApi'
+import { showMessage } from '../../../../componets/common/promptShow'
 
 @Component
   /**
@@ -90,13 +92,17 @@ export default struct BookInfos {
           }.alignItems(HorizontalAlign.Start)
         }.alignItems(HorizontalAlign.Start)
       }
-    }.onClick(() => { // todo: 暂时屏蔽书籍详情页
-      // 服务器书架的书 → 在线阅读器（按章拉服务器正文）
+    }.onClick(async () => { // todo: 暂时屏蔽书籍详情页
       if (this.book.origin === SERVER_SHELF_ORIGIN) {
-        router.pushUrl({
-          url: 'pages/view/ServerShelf/ServerReaderPage',
-          params: { book: ServerApi.toServerBook(this.book) }
-        })
+        try {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          const local = await ServerApi.ensureLocalBook(context, this.book)
+          router.pushUrl({
+            url: 'pages/view/Reader/ReaderPage3', params: { bookData: local }
+          })
+        } catch (e) {
+          showMessage('服务器书下载失败：' + (e instanceof Error ? e.message : '网络错误'))
+        }
         return
       }
       router.pushUrl({

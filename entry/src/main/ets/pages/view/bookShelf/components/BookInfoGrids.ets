@@ -1,11 +1,13 @@
 import confirmDialogExample from '../../../../componets/common/confirmDialog'
 import { Books } from '../../../../database/entities/Books'
+import { common } from '@kit.AbilityKit'
 import { router } from '@kit.ArkUI'
 import BookInfoDialogs from './dialog/BookInfoDialogs'
 import CommonConstants from '../../../../common/constants/CommonConstants'
 import FontConstants from '../../../../common/constants/FontConstants'
 import clickUtil from '../../../../common/utils/ClickUtils'
 import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../common/utils/ServerApi'
+import { showMessage } from '../../../../componets/common/promptShow'
 
 @Component
 /**
@@ -121,13 +123,17 @@ export default struct BookInfoGrids{
     .alignItems(HorizontalAlign.Start)
     .padding({ left:8,right:8,bottom:5,top:5 })
     .onClick(()=>{
-      clickUtil.preventClick(()=>{
-        // 服务器书架的书 → 在线阅读器
+      clickUtil.preventClick(async ()=>{
         if (this.book.origin === SERVER_SHELF_ORIGIN) {
-          router.pushUrl({
-            url: 'pages/view/ServerShelf/ServerReaderPage',
-            params: { book: ServerApi.toServerBook(this.book) }
-          })
+          try {
+            const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+            const local = await ServerApi.ensureLocalBook(context, this.book)
+            router.pushUrl({
+              url: 'pages/view/Reader/ReaderPage3', params: { bookData: local }
+            })
+          } catch (e) {
+            showMessage('服务器书下载失败：' + (e instanceof Error ? e.message : '网络错误'))
+          }
           return
         }
         router.pushUrl({

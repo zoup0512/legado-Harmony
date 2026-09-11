@@ -17,7 +17,7 @@ class BooksDao {
         return
       }
       await DbUtil.createTable(createSql)
-      AppDatabaseUtil.existsTable(this.TABLE_NAME)
+      await AppDatabaseUtil.existsTable(this.TABLE_NAME)
       return
     } catch (err) {
       console.info('TagInfo', JSON.stringify(err))
@@ -427,6 +427,23 @@ class BooksDao {
     }
   }
 
+  //按服务器稳定 URL 查找本地缓存书，避免使用可能变化的书名/作者匹配
+  async getServerBookByUrl(serverBookUrl: string): Promise<Books[]> {
+    if (!serverBookUrl) {
+      return [];
+    }
+    try {
+      const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
+      const escaped = serverBookUrl.replace(/'/g, "''");
+      const sql = `SELECT * FROM ${this.TABLE_NAME} WHERE origin = 'server-shelf' AND (serverBookUrl = '${escaped}' OR bookUrl = '${escaped}')`;
+      const books = await DbUtil.querySqlForList<Books>(sql, column);
+      return books || [];
+    } catch (err) {
+      console.error('getServerBookByUrl, Error:', err);
+      return [];
+    }
+  }
+
 
   //根据书籍Id获取书籍
   async getBookByIds(ids: number[]) {
@@ -453,8 +470,8 @@ class BooksDao {
   }
   //部分更新
   async partialUpdate(books: Books) {
-    if (!(books instanceof Books)) {
-      console.warn('Invalid Books instance.');
+    if (!books || books.id === undefined) {
+      console.warn('Invalid Books data.');
       return;
     }
 
@@ -480,7 +497,9 @@ class BooksDao {
       'latestChapterTitle', 'latestChapterTime', 'lastCheckTime',
       'lastCheckCount', 'totalChapterNum', 'durChapterTitle',
       'durChapterIndex', 'durChapterPos', 'durChapterTime',
-      'wordCount', 'syncTime', 'updateTime'
+      'wordCount', 'syncTime', 'updateTime',
+      'bookUrl', 'origin', 'originName', 'isLocalBook', 'serverBookUrl',
+      'serverFileSize', 'serverFileModified', 'serverFileName', 'serverUpdateAvailable'
     ]);
   }
 }

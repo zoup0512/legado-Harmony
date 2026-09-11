@@ -1,4 +1,5 @@
 import CommonConstants from '../../common/constants/CommonConstants'
+import { common } from '@kit.AbilityKit'
 import ReadRecordItem from '../../componets/bookDetail/ReadRecordItem'
 import TagIndex from '../../componets/bookDetail/TagIndex'
 import { router, SwipeRefresher } from '@kit.ArkUI'
@@ -11,6 +12,7 @@ import booksUtil from '../../common/utils/booksUtils'
 import { ThemeStorageKey } from '../../common/constants/Theme'
 import { ThemeItem } from '../../common/model/Theme'
 import { bookParser } from '@kit.ReaderKit'
+import ServerApi, { SERVER_SHELF_ORIGIN } from '../../common/utils/ServerApi'
 
 /**
  * 标题图片样式
@@ -80,6 +82,19 @@ struct BookDetailPage {
       this.bookData = router.getParams() as Books //校验是否加入书架
       if (!this.bookData.isJoin) {
         this.bookData.isJoin = await booksUtil.isExistBooks(this.bookData.bookUrl, this.bookData.bookName)
+      }
+      if (this.bookData.origin === SERVER_SHELF_ORIGIN) {
+        // 服务器书已同步到本地书架；详情入口也确保本地文件存在后再交给 ReaderKit
+        try {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+          this.bookData = await ServerApi.ensureLocalBook(context, this.bookData)
+          router.replaceUrl({
+            url: 'pages/view/Reader/ReaderPage3', params: { bookData: this.bookData }
+          })
+          return
+        } catch (e) {
+          console.log('server book cache failed: ' + JSON.stringify(e))
+        }
       }
       this.initUrlBook()
     }
