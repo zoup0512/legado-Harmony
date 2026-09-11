@@ -37,3 +37,10 @@ yarn.lock
 Thumbs.db
 *.swp
 *.swo
+
+# _ref/reader-dev 本地参考与构建产物（不入库）
+_ref/reader-dev/work/
+_ref/reader-dev/docs/decompiled-pro/
+_ref/reader-dev/scripts/__pycache__/
+_ref/reader-dev/scripts/backup-book-sources-*.json
+_ref/reader-dev/scripts/_*.html
