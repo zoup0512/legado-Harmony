@@ -1,9 +1,11 @@
-import router from '@ohos.router';
 import { promptAction } from '@kit.ArkUI';
 import { Books } from '../../../database/entities/Books';
 import privacyFolderService from '../../../privacy/PrivacyFolderService';
 import privacySessionService from '../../../privacy/PrivacySessionService';
 import Header from '../../../componets/common/Header';
+import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
+import BookInfos from '../bookShelf/components/BookInfos';
+import BookInfoGrids from '../bookShelf/components/BookInfoGrids';
 
 @Entry
 @Component
@@ -12,7 +14,19 @@ export default struct PrivacyFolder {
   @State books: Books[] = [];
   @State searchKey: string = '';
   @State busy: boolean = false;
-  @StorageLink('BOOK_IS_BOOK_REFRESHING') isBookRefreshing: number = 0;
+  // 与主页书架一致的展示模式：列表 / 宫格
+  @State EXHIBIT: string = '列表';
+  @State EXHIBIT_NAMES: string[] = ['列表', '宫格'];
+  // BookInfos/BookInfoGrids 的长按弹窗(BookInfoDialogs)依赖祖先提供该数据源
+  @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>();
+  // 长按弹窗内删除/移出隐私后累加该计数，隐私页同步重载列表
+  @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch('onShelfChanged') isBookRefreshing: number = 0;
+
+  onShelfChanged() {
+    if (this.unlocked) {
+      this.loadBooks();
+    }
+  }
 
   async aboutToAppear() {
     this.unlocked = privacySessionService.isUnlocked();
@@ -65,34 +79,39 @@ export default struct PrivacyFolder {
         if (this.books.length === 0) {
           Text('暂无私密书籍').fontColor('#888888').layoutWeight(1).margin({ top: 60 });
         } else {
+          // 列表/宫格切换，样式与主页书架一致：仅显示另一个模式入口
+          Row() {
+            ForEach(this.EXHIBIT_NAMES, (item: string) => {
+              if (item !== this.EXHIBIT) {
+                Text(item)
+                  .fontSize(15)
+                  .fontWeight(400)
+                  .fontColor('rgba(0,0,0,0.5)')
+                  .onClick(() => {
+                    this.EXHIBIT = item
+                  })
+              }
+            })
+          }
+          .width('100%')
+
+          // 复用主页书架的书籍条目与布局（含封面角标、长按操作弹窗）
           List({ space: 10 }) {
             ForEach(this.books, (book: Books) => {
               ListItem() {
-                Row({ space: 12 }) {
-                  Column() { Text(book.bookName).fontSize(16); Text(book.author || '本地书籍').fontSize(12).fontColor('#888888'); }
-                    .alignItems(HorizontalAlign.Start).layoutWeight(1);
-                  Text('移出').fontColor('#3478F6').onClick(async () => {
-                    if (this.busy) return;
-                    this.busy = true;
-                    try {
-                      const moved = await privacyFolderService.moveOut(book);
-                      if (moved) {
-                        this.isBookRefreshing++;
-                        await this.loadBooks();
-                      }
-                      promptAction.showToast({ message: moved ? '已移出至未分组书架' : '移出失败，请重试' });
-                    } finally {
-                      this.busy = false;
-                    }
-                  });
-                  Text('删除').fontColor('#E64545').onClick(async () => {
-                    await privacyFolderService.remove(book); await this.loadBooks();
-                  });
-                }.padding(12).backgroundColor('#FFFFFF').borderRadius(10)
-                  .onClick(() => router.pushUrl({ url: 'pages/view/Reader/ReaderPage3', params: { bookData: book, clickBookCatalogId: 0 } }));
+                if (this.EXHIBIT === '宫格') {
+                  BookInfoGrids({ book: book })
+                } else {
+                  BookInfos({ book: book })
+                }
               }
             })
-          }.layoutWeight(1)
+          }
+          .alignListItem(ListItemAlign.Center)
+          .layoutWeight(1)
+          .lanes(this.EXHIBIT === '宫格' ? 3 : 1)
+          .scrollBar(BarState.Off)
+          .margin({ left: -10, right: -10 })
         }
       }
     }.width('100%').height('100%').padding({ left: 20, right: 20, top: 0, bottom: 16 })

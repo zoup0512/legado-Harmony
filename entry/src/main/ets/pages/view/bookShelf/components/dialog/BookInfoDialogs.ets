@@ -11,6 +11,7 @@ import PaddingConstants from '../../../../../common/constants/PaddingConstants'
 import CommonConstants from '../../../../../common/constants/CommonConstants'
 import BasicDataSource from '../../../../../common/LazyIDataSource/BasicDataSource'
 import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../../common/utils/ServerApi'
+import privacyFolderService, { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyFolderService'
 import { common } from '@kit.AbilityKit'
 
 @CustomDialog
@@ -31,6 +32,26 @@ export default struct BookInfoDialogs{
   @Consume('booksDataSource')  booksDataSource: BasicDataSource<Books>
   cancel: () => void = () => {
   }
+
+  aboutToAppear(): void {
+    // 隐私分组的书籍（如隐私文件夹内长按）额外提供“移出隐私”操作
+    if (this.bookData && this.bookData.bookGroup === PRIVACY_BOOK_GROUP) {
+      this.buttonListInfo.push(new buttonList(5, '移出隐私', $r('app.media.folder')))
+    }
+  }
+
+  //移出隐私文件夹（回到未分组书架）
+  async moveOutPrivacy() {
+    if (this.bookData.id) {
+      await privacyFolderService.moveOut(this.bookData)
+    }
+    setTimeout(() => {
+      this.isBookRefreshing++
+      this.controller?.close()
+    }, 200)
+    showMessage('已移出至未分组书架')
+  }
+
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @State isCatalogAddShelf:boolean = false
@@ -151,6 +172,8 @@ export default struct BookInfoDialogs{
         this.isCatalogAddShelf = true;break;
       case 4 :
         this.bookDelDialog?.open(); break;
+      case 5 :
+        this.moveOutPrivacy(); break;
     }
   }
 
