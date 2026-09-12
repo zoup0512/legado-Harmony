@@ -195,9 +195,12 @@ struct ReaderPage3 {
       // 首帧真正渲染完成才撤加载层，避免提前露出未绘制画布造成闪屏
       this.readerLoading = false;
       this.bookData.localBookDurChapterPos = data;
-      this.bookData.durChapterIndex = data.resourceIndex ?? this.bookData.durChapterIndex
-      const currentCatalog = this.CatalogList.getData(this.bookData.durChapterIndex)
+      // ReaderKit 的 resourceIndex 基于 spine，可能超出目录列表范围；
+      // 只接受范围内的下标，避免越界值写入 bookData 并持久化
+      const resourceIndex = data.resourceIndex ?? this.bookData.durChapterIndex
+      const currentCatalog = this.getCatalogItemSafely(resourceIndex)
       if (currentCatalog) {
+        this.bookData.durChapterIndex = resourceIndex
         this.bookData.durChapterTitle = currentCatalog.catalogName;
       }
       this.bookData.totalChapterNum = this.CatalogList.totalCount();
@@ -288,7 +291,7 @@ struct ReaderPage3 {
                   router.back()
                 })
 
-              Text(`${this.CatalogList.getData(this.bookData.durChapterIndex ?? 0).catalogName ?? ''}`
+              Text(`${this.currentCatalogTitle()}`
                 .replace(new RegExp('\\s{1,}', 'g'), ' ')
                 .replaceAll('=', ''))
                 .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -403,7 +406,7 @@ struct ReaderPage3 {
                   .onClick(() => {
                     if (this.bookData.durChapterIndex > 0) {
                       this.bookData.durChapterIndex--
-                      this.jumpToCatalogItem(this.CatalogList.getData(this.bookData.durChapterIndex))
+                      this.jumpToCatalogItem(this.getCatalogItemSafely(this.bookData.durChapterIndex))
                     }
                   })
 
@@ -421,7 +424,7 @@ struct ReaderPage3 {
                     //结束滑动后再跳转到对应章节
                     if (mode == SliderChangeMode.End) {
                       this.bookData.durChapterIndex = value
-                      this.jumpToCatalogItem(this.CatalogList.getData(this.bookData.durChapterIndex))
+                      this.jumpToCatalogItem(this.getCatalogItemSafely(value))
                     }
                   })
 
@@ -430,7 +433,7 @@ struct ReaderPage3 {
                   .onClick(() => {
                     if (this.bookData.durChapterIndex < this.CatalogList.totalCount() - 1) {
                       this.bookData.durChapterIndex++
-                      this.jumpToCatalogItem(this.CatalogList.getData(this.bookData.durChapterIndex))
+                      this.jumpToCatalogItem(this.getCatalogItemSafely(this.bookData.durChapterIndex))
                     }
                   })
               }
@@ -830,11 +833,29 @@ struct ReaderPage3 {
   }
 
   /**
+   * 越界安全地取目录项：目录未加载（如 startPlay 失败）或下标超出
+   * 目录长度时返回 undefined，调用方必须判空后再访问字段
+   */
+  private getCatalogItemSafely(index: number): bookParser.CatalogItem | undefined {
+    if (index < 0 || index >= this.CatalogList.totalCount()) {
+      return undefined
+    }
+    return this.CatalogList.getData(index)
+  }
+
+  private currentCatalogTitle(): string {
+    return this.getCatalogItemSafely(this.bookData.durChapterIndex ?? 0)?.catalogName ?? ''
+  }
+
+  /**
    * 跳转到指定的章节
    *
    * @param catalogItem 书籍目录节点
    */
-  private async jumpToCatalogItem(catalogItem: bookParser.CatalogItem) {
+  private async jumpToCatalogItem(catalogItem?: bookParser.CatalogItem) {
+    if (!catalogItem) {
+      return
+    }
     // 根据目录项获取章节的索引
     const resourceIndex = this.getResourceItemByCatalog(catalogItem).index;
     // 跳转到指定章节
