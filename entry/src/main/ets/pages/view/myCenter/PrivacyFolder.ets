@@ -16,7 +16,6 @@ export default struct PrivacyFolder {
   @State busy: boolean = false;
   // 与主页书架一致的展示模式：列表 / 宫格
   @State EXHIBIT: string = '列表';
-  @State EXHIBIT_NAMES: string[] = ['列表', '宫格'];
   // BookInfos/BookInfoGrids 的长按弹窗(BookInfoDialogs)依赖祖先提供该数据源
   @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>();
   // 长按弹窗内删除/移出隐私后累加该计数，隐私页同步重载列表
@@ -76,25 +75,23 @@ export default struct PrivacyFolder {
       } else {
         Search({ value: this.searchKey, placeholder: '搜索私密书籍' })
           .onChange(async (value: string) => { this.searchKey = value; await this.loadBooks(); });
+        // 列表/宫格切换：图标常显靠右，当前模式高亮
+        Row({ space: 18 }) {
+          Image($r('app.media.view_list'))
+            .width(22).height(22)
+            .fillColor(this.EXHIBIT === '列表' ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.35)')
+            .onClick(() => { this.EXHIBIT = '列表' })
+          Image($r('app.media.view_grid'))
+            .width(22).height(22)
+            .fillColor(this.EXHIBIT === '宫格' ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.35)')
+            .onClick(() => { this.EXHIBIT = '宫格' })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.End)
+
         if (this.books.length === 0) {
           Text('暂无私密书籍').fontColor('#888888').layoutWeight(1).margin({ top: 60 });
         } else {
-          // 列表/宫格切换，样式与主页书架一致：仅显示另一个模式入口
-          Row() {
-            ForEach(this.EXHIBIT_NAMES, (item: string) => {
-              if (item !== this.EXHIBIT) {
-                Text(item)
-                  .fontSize(15)
-                  .fontWeight(400)
-                  .fontColor('rgba(0,0,0,0.5)')
-                  .onClick(() => {
-                    this.EXHIBIT = item
-                  })
-              }
-            })
-          }
-          .width('100%')
-
           // 复用主页书架的书籍条目与布局（含封面角标、长按操作弹窗）
           List({ space: 10 }) {
             ForEach(this.books, (book: Books) => {
