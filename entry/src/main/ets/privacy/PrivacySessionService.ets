@@ -112,7 +112,10 @@ class PrivacySessionService {
   }
 
   async unlock(): Promise<boolean> {
-    if (this.isUnlocked() || this.authenticating) {
+    if (this.isUnlocked()) {
+      return true;
+    }
+    if (this.authenticating) {
       return false;
     }
     this.authenticating = true;

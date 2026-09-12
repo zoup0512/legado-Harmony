@@ -12,6 +12,7 @@ import CommonConstants from '../../../../../common/constants/CommonConstants'
 import BasicDataSource from '../../../../../common/LazyIDataSource/BasicDataSource'
 import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../../common/utils/ServerApi'
 import privacyFolderService, { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyFolderService'
+import privacySessionService from '../../../../../privacy/PrivacySessionService'
 import { common } from '@kit.AbilityKit'
 
 @CustomDialog
@@ -34,9 +35,52 @@ export default struct BookInfoDialogs{
   }
 
   aboutToAppear(): void {
-    // 隐私分组的书籍（如隐私文件夹内长按）额外提供“移出隐私”操作
+    if (this.buttonListInfo.some((item: buttonList) => item.id === 5 || item.id === 6)) {
+      return
+    }
     if (this.bookData && this.bookData.bookGroup === PRIVACY_BOOK_GROUP) {
       this.buttonListInfo.push(new buttonList(5, '移出隐私', $r('app.media.folder')))
+    } else {
+      this.buttonListInfo.push(new buttonList(6, '移入隐私', $r('app.media.hide')))
+    }
+  }
+
+  @State privacyBusy: boolean = false
+
+  confirmMoveToPrivacy() {
+    if (this.privacyBusy) return
+    if (!this.bookData.id || !this.bookData.isLocalBook) {
+      showMessage('仅支持移入本地书籍')
+      return
+    }
+    this.privacyBusy = true
+    AlertDialog.show({
+      title: '移入隐私文件夹',
+      message: '确定将该本地书籍移入隐私文件夹？目前仅在应用内隐藏分组，不是加密。原文件和缓存不会删除。',
+      autoCancel: false,
+      primaryButton: { value: '取消', action: () => { this.privacyBusy = false } },
+      secondaryButton: { value: '确认移入', action: () => { this.moveToPrivacy() } },
+      cancel: () => { this.privacyBusy = false }
+    })
+  }
+
+  async moveToPrivacy() {
+    try {
+      if (!await privacySessionService.unlock()) {
+        showMessage(privacySessionService.getLastFailureMessage() || '认证失败，请重试')
+        return
+      }
+      if (!await privacyFolderService.moveIn(this.bookData)) {
+        showMessage('移入隐私文件夹失败')
+        return
+      }
+      this.isBookRefreshing++
+      this.controller?.close()
+      showMessage('已移入隐私文件夹')
+    } catch (_) {
+      showMessage('移入隐私文件夹失败')
+    } finally {
+      this.privacyBusy = false
     }
   }
 
@@ -163,6 +207,7 @@ export default struct BookInfoDialogs{
   }
 
   bookInfoButton(id:number){
+    if (this.privacyBusy) return
     switch (id){
       case 1 :
         this.isTopBook(); break;
@@ -174,6 +219,8 @@ export default struct BookInfoDialogs{
         this.bookDelDialog?.open(); break;
       case 5 :
         this.moveOutPrivacy(); break;
+      case 6 :
+        this.confirmMoveToPrivacy(); break;
     }
   }
 

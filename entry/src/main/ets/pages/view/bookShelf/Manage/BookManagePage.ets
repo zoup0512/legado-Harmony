@@ -438,7 +438,7 @@ struct BookManagePage {
     this.privacyBusy = true;
     AlertDialog.show({
       title: '移入隐私文件夹',
-      message: `确定移入选中的 ${selected.length} 本本地书籍？目前仅在应用内隐藏分组，不是加密，也不提供系统身份认证。原文件和缓存不会删除。`,
+      message: `确定移入选中的 ${selected.length} 本本地书籍？目前仅在应用内隐藏分组，不是加密。确认后需要通过系统身份认证，原文件和缓存不会删除。`,
       autoCancel: false,
       primaryButton: { value: '取消', action: () => { this.privacyBusy = false; } },
       secondaryButton: { value: '确认移入', action: () => { this.moveToPrivacy(selected); } },
@@ -450,7 +450,10 @@ struct BookManagePage {
     let success = 0;
     let failed = 0;
     try {
-      if (!await privacySessionService.unlock()) return;
+      if (!await privacySessionService.unlock()) {
+        showMessage(privacySessionService.getLastFailureMessage() || '认证失败，请重试');
+        return;
+      }
       for (const book of selected) {
         try {
           if (await privacyFolderService.moveIn(book)) success++;
