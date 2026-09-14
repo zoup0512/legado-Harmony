@@ -1,48 +1,55 @@
-import UIAbility from '@ohos.app.ability.UIAbility';
-import AbilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
-import hilog from '@ohos.hilog';
+import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
+import { abilityDelegatorRegistry } from '@kit.TestKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { window } from '@kit.ArkUI';
 import { Hypium } from '@ohos/hypium';
 import testsuite from '../test/List.test';
-import window from '@ohos.window';
+
+const ON_DESTROY_ERROR = -2;
 
 export default class TestAbility extends UIAbility {
-    onCreate(want, launchParam) {
-        hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onCreate');
-        hilog.info(0x0000, 'testTag', '%{public}s', 'want param:' + JSON.stringify(want) ?? '');
-        hilog.info(0x0000, 'testTag', '%{public}s', 'launchParam:'+ JSON.stringify(launchParam) ?? '');
-        var abilityDelegator: any
-        abilityDelegator = AbilityDelegatorRegistry.getAbilityDelegator()
-        var abilityDelegatorArguments: any
-        abilityDelegatorArguments = AbilityDelegatorRegistry.getArguments()
-        hilog.info(0x0000, 'testTag', '%{public}s', 'start run testcase!!!');
-        Hypium.hypiumTest(abilityDelegator, abilityDelegatorArguments, testsuite)
-    }
+  abilityDelegator: abilityDelegatorRegistry.AbilityDelegator;
 
-    onDestroy() {
-        hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onDestroy');
-    }
+  constructor() {
+    super();
+    this.abilityDelegator = abilityDelegatorRegistry.getAbilityDelegator();
+  }
 
-    onWindowStageCreate(windowStage: window.WindowStage) {
-        hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onWindowStageCreate');
-        windowStage.loadContent('testability/pages/Index', (err, data) => {
-            if (err.code) {
-                hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
-                return;
-            }
-            hilog.info(0x0000, 'testTag', 'Succeeded in loading the content. Data: %{public}s',
-                JSON.stringify(data) ?? '');
-        });
-    }
+  onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onCreate');
+    hilog.info(0x0000, 'testTag', '%{public}s', 'want param:' + JSON.stringify(want) ?? '');
+    hilog.info(0x0000, 'testTag', '%{public}s', 'launchParam:' + JSON.stringify(launchParam) ?? '');
+    let abilityDelegatorArguments: abilityDelegatorRegistry.AbilityDelegatorArgs;
+    abilityDelegatorArguments = abilityDelegatorRegistry.getArguments();
+    hilog.info(0x0000, 'testTag', '%{public}s', 'start run testcase!!!');
+    Hypium.hypiumTest(this.abilityDelegator, abilityDelegatorArguments, testsuite);
+  }
 
-    onWindowStageDestroy() {
-        hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onWindowStageDestroy');
-    }
+  onDestroy() {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onDestroy');
+    this.abilityDelegator.finishTest('TestAbility onDestroy unexpectedly!', ON_DESTROY_ERROR, () => {});
+  }
 
-    onForeground() {
-        hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onForeground');
-    }
+  onWindowStageCreate(windowStage: window.WindowStage) {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onWindowStageCreate');
+    windowStage.loadContent('testability/pages/Index', (err) => {
+      if (err.code) {
+        hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
+        return;
+      }
+      hilog.info(0x0000, 'testTag', 'Succeeded in loading the content.');
+    });
+  }
 
-    onBackground() {
-        hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onBackground');
-    }
+  onWindowStageDestroy() {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onWindowStageDestroy');
+  }
+
+  onForeground() {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onForeground');
+  }
+
+  onBackground() {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'TestAbility onBackground');
+  }
 }

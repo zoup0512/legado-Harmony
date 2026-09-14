@@ -235,26 +235,13 @@ export default struct IndexShelf {
       switch (index) {
         case 0:
           // 本地导入
-          //   router.pushUrl({
-          //     url: 'pages/view/bookShelf/LocalImportPage'
-          //   });
-          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-          const requestId = FileHandler.createImportRequestId()
-          const bookType = this.currentIndex
-          const FileResult = await FileHandler.documentPickerFile(context,
-            ['.txt', '.epub', '.mobi', '.azw', '.azw3'], 1, requestId)
-          if (FileResult.length === 0) {
-            return
-          }
-          let imported = false
-          for (const item of FileResult) {
-            const success = await FileHandler.CopyFile(context, item, bookType, requestId)
-            imported = imported || success
-          }
           this.isShowImport = false
-          if (imported) {
-            this.isBookRefreshing++
-          }
+          router.pushUrl({
+            url: 'pages/view/bookShelf/LocalImportPage',
+            params: {
+              bookType: this.currentIndex
+            }
+          })
           break
         case 1:
           // 云盘导入

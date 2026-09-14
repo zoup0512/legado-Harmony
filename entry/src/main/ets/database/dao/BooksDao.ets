@@ -203,7 +203,7 @@ class BooksDao {
         }
       }
       books.createTime = Date.now()
-      await DbUtil.insert(this.TABLE_NAME, books, column)
+      books.id = await DbUtil.insert(this.TABLE_NAME, books, column)
       console.log('TagInfo', '创建成功')
       return true
     } catch (err) {
@@ -414,6 +414,40 @@ class BooksDao {
     }
   }
 
+  //本地导入重复检测所需记录；服务器书缓存使用独立远端标识，不参与普通本地文件重复判断
+  async getLocalBooksForImportDuplicateCheck(): Promise<Books[]> {
+    try {
+      const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
+      const predicates = DbUtil.getPredicates(this.TABLE_NAME);
+      predicates.equalTo('isLocalBook', true);
+      predicates.beginWrap().notEqualTo('origin', 'server-shelf').or().isNull('origin').endWrap();
+      const books = await DbUtil.queryForList<Books>(predicates, column);
+      return books || [];
+    } catch (err) {
+      console.error('getLocalBooksForImportDuplicateCheck, Error:', err);
+      return [];
+    }
+  }
+
+  //用于本地导入生成不碰撞的展示书名，覆盖所有分组（包括隐私分组）
+  async getExistingBookNames(): Promise<string[]> {
+    try {
+      const column: ColumnInfo[] = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['bookName']);
+      const predicates = DbUtil.getPredicates(this.TABLE_NAME);
+      const books = await DbUtil.queryForList<Books>(predicates, column);
+      const names: string[] = [];
+      for (let index = 0; index < books.length; index++) {
+        if (books[index].bookName) {
+          names.push(books[index].bookName);
+        }
+      }
+      return names;
+    } catch (err) {
+      console.error('getExistingBookNames, Error:', err);
+      return [];
+    }
+  }
+
   //服务器书架同步的书（origin = server-shelf；不过滤分组，避免隐私分组(99)的书被同步逻辑误判为不存在而重复插入）
   async getServerShelfBooks(): Promise<Books[]> {
     try {
@@ -498,8 +532,9 @@ class BooksDao {
       'lastCheckCount', 'totalChapterNum', 'durChapterTitle',
       'durChapterIndex', 'durChapterPos', 'durChapterTime',
       'wordCount', 'syncTime', 'updateTime',
-      'bookUrl', 'origin', 'originName', 'isLocalBook', 'serverBookUrl',
-      'serverFileSize', 'serverFileModified', 'serverFileName', 'serverUpdateAvailable'
+      'bookUrl', 'origin', 'originName', 'isLocalBook', 'localFileSize',
+      'localFileModified', 'localFileHash', 'serverBookUrl', 'serverFileSize', 'serverFileModified',
+      'serverFileName', 'serverUpdateAvailable'
     ]);
   }
 }

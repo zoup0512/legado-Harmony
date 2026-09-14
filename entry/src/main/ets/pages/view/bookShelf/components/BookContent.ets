@@ -32,13 +32,13 @@ export default struct BookContent {
   @Prop @Watch('changeBookType')bookTypeNumber:number
   //更新数据累加刷新数据页面
   @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch("isRefresh")isBookRefreshing: number = 0
-  isRefresh(){
+  async isRefresh(): Promise<void> {
     this.currentPage = 1
     // if (this.booksDataSource.totalCount() > 0){
     //   this.booksDataSource.clear()
     // }
     if (this.isBookRefreshing >= 0) {
-      this.getBookList()
+      await Promise.all([this.getBookCount(), this.getBookList()])
     }
   }
 

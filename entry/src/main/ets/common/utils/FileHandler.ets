@@ -6,8 +6,11 @@ import { showMessage } from '../../componets/common/promptShow';
 import { picker } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { buffer } from '@kit.ArkTS'
-import { Books } from '../../database/entities/Books';
-import booksUtil from './booksUtils';
+import localBookImportService, {
+  LOCAL_BOOK_FILE_SUFFIX_FILTERS,
+  LocalBookImportCandidate,
+  LocalBookImportStatus
+} from './LocalBookImportService';
 
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -45,68 +48,42 @@ export class FileHandler {
 
   static async CopyFile(context: common.UIAbilityContext, srcUrl: string, currentIndex: number,
     requestId: string = FileHandler.createImportRequestId()): Promise<boolean> {
-    let stage = 'copy.context';
     const started = Date.now();
     hilog.info(0x0000, 'LocalImport',
       'request=%{public}s stage=copy.start contextAvailable=%{public}s %{public}s',
       requestId, String(!!context), FileHandler.uriSummary(srcUrl));
-    try {
-      if (!context || !context.filesDir) {
-        throw new Error('Import context unavailable');
-      }
-      if (!srcUrl) {
-        hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=copy.empty', requestId);
-        return false;
-      }
-      stage = 'copy.open';
-      const file = fs.openSync(srcUrl, fs.OpenMode.READ_ONLY);
-      let dstPath = '';
-      let fileName = '';
-      try {
-        fileName = file.name;
-        dstPath = context.filesDir + '/' + fileName;
-        stage = 'copy.transfer';
-        await fs.copyFile(file.fd, dstPath, 0);
-      } finally {
-        fs.closeSync(file);
-      }
-      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=copy.done elapsedMs=%{public}d',
-        requestId, Date.now() - started);
-      const book: Books = {
-        bookName: fileName,
-        bookUrl: dstPath,
-        author: '暂无',
-        bookGroup: 4,
-        latestChapterTime: 0,
-        totalChapterNum: 0,
-        durChapterIndex: 0,
-        durChapterPos: 0,
-        durChapterTime: 0,
-        canUpdate: false,
-        sort: 0,
-        originOrder: 0,
-        syncTime: 0,
-        bookType: currentIndex,
-        isTop: false,
-        isJoin: true,
-        isLocalBook: true,
-        serverFileSize: 0,
-        serverFileModified: 0,
-        serverUpdateAvailable: false
-      };
-      stage = 'copy.bookshelf';
-      if (!await booksUtil.addBooks(book)) {
-        throw new Error('Bookshelf insert failed');
-      }
-      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=import.done elapsedMs=%{public}d',
-        requestId, Date.now() - started);
-      showMessage('导入并添加到书架成功');
-      return true;
-    } catch (error) {
-      FileHandler.logImportError(requestId, stage, error as BusinessError);
+    if (!context || !context.filesDir || !srcUrl) {
       showMessage('本地导入失败，请查看 LocalImport 日志');
       return false;
     }
+    const scanResult = await localBookImportService.scanPickerUris([srcUrl], requestId);
+    if (scanResult.candidates.length === 0) {
+      showMessage('本地导入失败，请查看 LocalImport 日志');
+      return false;
+    }
+    const candidate: LocalBookImportCandidate = scanResult.candidates[0];
+    if (candidate.status === LocalBookImportStatus.DUPLICATE) {
+      showMessage('该本地书籍已存在');
+      return false;
+    }
+    if (candidate.status !== LocalBookImportStatus.READY) {
+      showMessage(candidate.message.length > 0 ? candidate.message : '本地导入失败，请查看 LocalImport 日志');
+      return false;
+    }
+    const result = await localBookImportService.importSingle(context, candidate, currentIndex, requestId);
+    hilog.info(0x0000, 'LocalImport',
+      'request=%{public}s stage=copy.done status=%{public}s elapsedMs=%{public}d',
+      requestId, result.status, Date.now() - started);
+    if (result.status === LocalBookImportStatus.IMPORTED) {
+      showMessage('导入并添加到书架成功');
+      return true;
+    }
+    if (result.status === LocalBookImportStatus.DUPLICATE) {
+      showMessage('该本地书籍已存在');
+      return false;
+    }
+    showMessage('本地导入失败，请查看 LocalImport 日志');
+    return false;
   }
 
   //动态获取文件大小
@@ -156,6 +133,17 @@ export class FileHandler {
       }
     }
     return chapters
+  }
+
+  static readonly LOCAL_BOOK_FILE_SUFFIX_FILTERS: string[] = LOCAL_BOOK_FILE_SUFFIX_FILTERS;
+
+  static canPickDirectory(): boolean {
+    return localBookImportService.canPickDirectory();
+  }
+
+  static async documentPickerDirectory(context: common.UIAbilityContext,
+    requestId: string = FileHandler.createImportRequestId()): Promise<string[]> {
+    return await localBookImportService.pickDirectoryUris(context, requestId);
   }
 
   static async documentPickerFile(context: common.UIAbilityContext, fileSuffixFilters: Array<string>,

@@ -81,6 +81,12 @@ export class Books {
   isJoin: boolean = false
   //是否本地导入（服务器书下载到本地后同样为 true）
   isLocalBook: boolean = false
+  //本地导入时记录的原文件大小，用于重复检测
+  localFileSize?: number = 0
+  //本地导入时记录的原文件修改时间（毫秒）
+  localFileModified?: number = 0
+  //本地导入文件的 SHA-256，用于可靠重复检测
+  localFileHash?: string
   //服务器书的稳定远端标识（如 local://uuid），bookUrl 始终保存本地文件路径
   serverBookUrl?: string
   //最近一次下载时服务器原文件大小

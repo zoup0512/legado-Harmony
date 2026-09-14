@@ -1,35 +1,42 @@
-import hilog from '@ohos.hilog';
-import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium'
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from '@ohos/hypium';
+import { LocalBookImportLogic } from '../../../main/ets/common/utils/LocalBookImportService';
 
 export default function abilityTest() {
-  describe('ActsAbilityTest', function () {
-    // Defines a test suite. Two parameters are supported: test suite name and test suite function.
-    beforeAll(function () {
-      // Presets an action, which is performed only once before all test cases of the test suite start.
-      // This API supports only one parameter: preset action function.
-    })
-    beforeEach(function () {
-      // Presets an action, which is performed before each unit test case starts.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: preset action function.
-    })
-    afterEach(function () {
-      // Presets a clear action, which is performed after each unit test case ends.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: clear action function.
-    })
-    afterAll(function () {
-      // Presets a clear action, which is performed after all test cases of the test suite end.
-      // This API supports only one parameter: clear action function.
-    })
-    it('assertContain',0, function () {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
+  describe('ActsAbilityTest', () => {
+    beforeAll(() => {
+    });
+    beforeEach(() => {
+    });
+    afterEach(() => {
+    });
+    afterAll(() => {
+    });
+
+    it('assertContain', 0, () => {
       hilog.info(0x0000, 'testTag', '%{public}s', 'it begin');
-      let a = 'abc'
-      let b = 'b'
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
-      expect(a).assertContain(b)
-      expect(a).assertEqual(a)
-    })
-  })
+      const value = 'abc';
+      const expected = 'b';
+      expect(value).assertContain(expected);
+      expect(value).assertEqual(value);
+    });
+
+    it('localBookImportFileRules', 0, () => {
+      expect(LocalBookImportLogic.extensionOf('小说.TXT')).assertEqual('.txt');
+      expect(LocalBookImportLogic.isSupportedFileName('book.epub')).assertTrue();
+      expect(LocalBookImportLogic.isSupportedFileName('book.pdf')).assertFalse();
+      expect(LocalBookImportLogic.isHiddenPath('/books/.cache/book.txt')).assertTrue();
+      expect(LocalBookImportLogic.isHiddenPath('/books/cache/book.txt')).assertFalse();
+      expect(LocalBookImportLogic.safeOriginalName('../书:名?.txt')).assertEqual('书_名_.txt');
+    });
+
+    it('localBookImportDuplicateAndDisplayRules', 0, () => {
+      expect(LocalBookImportLogic.duplicateKey('Book.TXT', 100, 200))
+        .assertEqual(LocalBookImportLogic.duplicateKey('book.txt', 100, 200));
+      expect(LocalBookImportLogic.generateDisplayName('三体', ['三体', '三体 (2)']))
+        .assertEqual('三体 (3)');
+      expect(LocalBookImportLogic.generateDisplayName('新书', ['三体']))
+        .assertEqual('新书');
+    });
+  });
 }
