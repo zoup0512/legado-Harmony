@@ -5,26 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.cer",
+          "certpath": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B2474546DA5E8A3198BA77F878A61A17DA9477E3583DAEAD0A25B8BB5CC3C6B3AC520F73CD5639C",
-          "profile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p7b",
+          "keyPassword": "0000001A74D3B9C3D8DB09E15979E4DB9D8CFA3EDCFF6259B8B47C046273A95D80E651C6793F03C1F930",
+          "profile": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p12",
-          "storePassword": "0000001B15F8CB89A4486129980CA45C1C4B36CC214AC1BD3A6734089F4155AD00A5FF0D00536507E6B3A7"
-        }
-      },
-      {
-        "name": "legado",
-        "type": "HarmonyOS",
-        "material": {
-          "storePassword": "0000001F39FAED2651D657099281BA9C199E92A7F8A9374824243F2A27430B35E7BB1A780D80A066340476F21DBD2C",
-          "certpath": "D:/喵公子Studio/Harmony签名/Legado发布.cer",
-          "keyAlias": "legado",
-          "keyPassword": "0000001F0589FA894DAA48A3E911B15A38059B6798F9C8B3EFD3D7279D80C9628B1AE59CB9EA616C14F26AA12F1E6B",
-          "profile": "D:/喵公子Studio/Harmony签名/legadoRelease.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "D:/喵公子Studio/Harmony签名/legado.p12"
+          "storeFile": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.p12",
+          "storePassword": "0000001A8EA0A5A548857DAF8334F4C6A990BD8C480CB137757F81DE5E883E8DBA373A69419375DB977C"
         }
       }
     ],
