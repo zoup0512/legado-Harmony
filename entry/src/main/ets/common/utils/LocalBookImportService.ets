@@ -9,6 +9,8 @@ import { Books } from '../../database/entities/Books';
 
 export const LOCAL_BOOK_FILE_SUFFIX_FILTERS: string[] = ['.txt', '.epub', '.mobi', '.azw', '.azw3'];
 export const LOCAL_BOOK_IMPORT_MAX_COUNT: number = 500;
+// 本地书默认进入"本地"分组；隐私导入时由调用方传入隐私分组
+export const LOCAL_BOOK_DEFAULT_GROUP: number = 4;
 
 export enum LocalBookImportStatus {
   READY = 'ready',
@@ -304,14 +306,15 @@ export class LocalBookImportService {
   async importSingle(context: common.UIAbilityContext, candidate: LocalBookImportCandidate, bookType: number,
     requestId: string = this.createRequestId()): Promise<LocalBookImportResult> {
     const state = await this.loadImportState();
-    const result = await this.importOne(context, candidate, bookType, state, requestId);
+    const result = await this.importOne(context, candidate, bookType, state, requestId, LOCAL_BOOK_DEFAULT_GROUP);
     return result;
   }
 
   async importCandidates(context: common.UIAbilityContext, candidates: LocalBookImportCandidate[], bookType: number,
     onProgress?: LocalBookImportProgressCallback,
     shouldCancel?: LocalBookImportCancelCheck,
-    requestId: string = this.createRequestId()): Promise<LocalBookBatchImportResult> {
+    requestId: string = this.createRequestId(),
+    bookGroup: number = LOCAL_BOOK_DEFAULT_GROUP): Promise<LocalBookBatchImportResult> {
     this.cancelRequested = false;
     const batchResult = new LocalBookBatchImportResult();
     const selectedCandidates: LocalBookImportCandidate[] = [];
@@ -340,7 +343,7 @@ export class LocalBookImportService {
         if (onProgress) {
           onProgress(batchResult.completed, batchResult.selected, candidate);
         }
-        const itemResult = await this.importOne(context, candidate, bookType, state, requestId);
+        const itemResult = await this.importOne(context, candidate, bookType, state, requestId, bookGroup);
         batchResult.results.push(itemResult);
       }
       batchResult.completed++;
@@ -617,7 +620,7 @@ export class LocalBookImportService {
   }
 
   private async importOne(context: common.UIAbilityContext, candidate: LocalBookImportCandidate, bookType: number,
-    state: LocalBookImportState, requestId: string): Promise<LocalBookImportResult> {
+    state: LocalBookImportState, requestId: string, bookGroup: number): Promise<LocalBookImportResult> {
     const result = new LocalBookImportResult();
     result.candidateId = candidate.id;
     let sourceFile: fs.File | undefined;
@@ -684,7 +687,7 @@ export class LocalBookImportService {
       book.bookUrl = finalPath;
       book.originName = candidate.originalName;
       book.author = '暂无';
-      book.bookGroup = 4;
+      book.bookGroup = bookGroup;
       book.bookType = bookType;
       book.isJoin = true;
       book.isLocalBook = true;

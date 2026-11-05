@@ -2,7 +2,7 @@
 import { SearchHead } from '../../../componets/search/SearchHead'
 import { SearchHistory } from '../../../componets/search/SearchHistory'
 import { SearchDetails } from '../../../componets/search/SearchDetails'
-import { SearchRefresh } from '../../../componets/search/SearchRefresh'
+import { SearchBook as SearchBookEntity } from '../../../database/entities/SearchBook'
 import taskSearchBooks from '../../../common/model/taskSearchBook'
 import { router } from '@kit.ArkUI'
 
@@ -15,7 +15,7 @@ interface routeParams {
 struct SearchBook {
   @Provide SearchValue: string =""
   @Provide  SearchStatus: number=0;
-  @Provide('searchBookList') books:SearchBook[] = []
+  @Provide('searchBookList') books:SearchBookEntity[] = []
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @Provide('isSearch') isSearch:boolean = false
   aboutToAppear(): void {
@@ -36,8 +36,6 @@ struct SearchBook {
       SearchHead();
       if(!this.isSearch && this.books.length <= 0){
         SearchHistory();
-      }else if(this.isSearch && this.books.length <= 0){
-        SearchRefresh()
       }else {
         SearchDetails({SearchValue:this.SearchValue}).layoutWeight(1)
       }

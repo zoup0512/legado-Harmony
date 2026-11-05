@@ -1,4 +1,3 @@
-import axios, { AxiosError, AxiosResponse } from '@ohos/axios'
 import dayjs from 'dayjs'
 import SideBar from '../../../../../componets/common/SideBar'
 import dialogTitleFuction from '../../../../../componets/common/dialogTitleFuction'
@@ -23,17 +22,14 @@ import { ThemeStorageKey } from '../../../../../common/constants/Theme'
 export default struct SourceView {
   titleArray: Array<string> = ['小说', '漫画', '有声书']
   index: number = 0
-  @StorageProp('pathBookSource') pathBookSource: string = ''
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @State currentIndex: number = 0
   @State activeNameMap: Record<string, boolean> = {}
-  @State fullActive: boolean = false
   @State groupList: GroupPartList[] = []
   @State sourceList: BookSourcePart[] = []
   @State searchValue: string = ''
   @State clickNameMap: Record<string, boolean> = {}
-  @State enabledMap: Record<string, boolean> = {}
   @Link isBatch: boolean
   @State loading: boolean = true
   @State errorText: string = ''
@@ -228,16 +224,6 @@ export default struct SourceView {
                 return
               }
               this.currentTitle = index
-            }
-          })
-
-          Row().width(12)
-          FilterText({
-            index: 2,
-            title: '校验',
-            hasActive: this.query.verify !== undefined,
-            onChange: (index) => {
-              showMessage('校验，开发中')
             }
           })
 
@@ -520,19 +506,6 @@ export default struct SourceView {
       Row() {
         Row() {
           Column() {
-            Image($r('app.media.verify'))
-              .width(24)
-              .margin({ bottom: 4 })
-            Text('校验')
-              .fontSize(12)
-          }
-          .layoutWeight(1)
-          .onClick(() => {
-            showMessage('校验')
-          })
-
-          Row().width(12)
-          Column() {
             Toggle({ type: ToggleType.Switch, isOn: this.toggleAll })
               .selectedColor(this.theme.mainColor)
               .margin({ bottom: 4 })
@@ -555,19 +528,6 @@ export default struct SourceView {
 
           Row().width(12)
           Column() {
-            Image($r('app.media.export_1'))
-              .width(24)
-              .margin({ bottom: 4 })
-            Text('导出')
-              .fontSize(12)
-          }
-          .layoutWeight(1)
-          .onClick(() => {
-            showMessage('导出')
-          })
-
-          Row().width(12)
-          Column() {
             Image($r('app.media.delete'))
               .width(24)
               .margin({ bottom: 4 })
@@ -579,7 +539,7 @@ export default struct SourceView {
             if (!Object.values(this.activeNameMap).filter(o => o).length) {
               return showMessage('请至少选择一个')
             }
-            await BookSourceDao.batchDelete(Object.keys(this.activeNameMap))
+            await BookSourceDao.batchDelete(Object.keys(this.activeNameMap).filter(key => this.activeNameMap[key]))
             showMessage('删除成功')
             this.activeNameMap = {}
             this.getList()
@@ -595,25 +555,22 @@ export default struct SourceView {
           }
           .layoutWeight(1).bindMenu(
             this.showMoreDialog,
-            this.rightDialogBuilder(this.More_Right_Dialog_Data, async (index: number) => {
-              switch (index) {
-                case 0:
+            this.rightDialogBuilder(this.More_Right_Dialog_Data, async (action: string) => {
+              switch (action) {
+                case '移动至':
                   if (!Object.values(this.activeNameMap).filter(o => o).length) {
                     showMessage('请至少选择一个')
                     return
                   }
                   this.isShowGroup = true;
                   break;
-                case 1:
+                case '评分':
                   if (!Object.values(this.activeNameMap).filter(o => o).length) {
                     showMessage('请至少选择一个')
                     return
                   }
                   this.dialogItem = this.sourceList.filter(item => this.activeNameMap[item.bookSourceUrl])[0]
                   this.dialogController.open()
-                  break;
-                case 2:
-                  showMessage(this.More_Right_Dialog_Data[index].title)
                   break;
               }
             }),
@@ -825,31 +782,20 @@ export default struct SourceView {
             .width(24).fillColor('#73000000')
             .bindMenu(
               this.showRightDialogMap[item.bookSourceUrl],
-              this.rightDialogBuilder(this.Item_Right_Dialog_Data, async (index: number) => {
-                switch (index) {
-                  case 0:
+              this.rightDialogBuilder(this.Item_Right_Dialog_Data, async (action: string) => {
+                switch (action) {
+                  case '编辑':
                     router.pushUrl({
                       url: 'pages/view/Find/BookSource/AddSourcePage', params: {
                         id: item.bookSourceUrl
                       }
                     })
                     break;
-                  case 1:
+                  case '评分':
                     this.dialogItem = JSON.parse(JSON.stringify(item)) as BookSourcePart
                     this.dialogController.open()
                     break;
-                  case 2:
-                  case 3:
-                    showMessage(this.Item_Right_Dialog_Data[index].title)
-                    break;
-                  case 4:
-                    router.pushUrl({
-                      url: 'pages/view/Find/BookSource/AddSourcePage', params: {
-                        id: item.bookSourceUrl, type: 1
-                      }
-                    })
-                    break;
-                  case 5:
+                  case '删除':
                     await BookSourceDao.delete(item.bookSourceUrl)
                     showMessage('删除成功')
                     this.getList()
@@ -949,19 +895,15 @@ export default struct SourceView {
   Item_Right_Dialog_Data: IconTitleVo[] = [
     new IconTitleVo($r('app.media.edit'), '编辑'),
     new IconTitleVo($r('app.media.icon_no_source_find'), '评分'),
-    new IconTitleVo($r('app.media.search'), '搜索'),
-    new IconTitleVo($r('app.media.ic_logout'), '登录'),
-    new IconTitleVo($r('app.media.icon_rule_help'), '调试'),
     new IconTitleVo($r('app.media.delete'), '删除')
   ]
   More_Right_Dialog_Data: IconTitleVo[] = [
     new IconTitleVo($r('app.media.ic_folder'), '移动至'),
     new IconTitleVo($r('app.media.icon_no_source_find'), '评分'),
-    new IconTitleVo($r('app.media.icon_share'), '分享'),
   ]
 
   @Builder
-  rightDialogBuilder(list: IconTitleVo[], dialogRightChange: (_index: number) => void) {
+  rightDialogBuilder(list: IconTitleVo[], dialogRightChange: (action: string) => void) {
     Column() {
       ForEach(list, (item: IconTitleVo, index) => {
         dialogTitleFuction({
@@ -970,7 +912,7 @@ export default struct SourceView {
           isBorder: list.length !== index + 1
         })
           .onClick(() => {
-            dialogRightChange(index)
+            dialogRightChange(item.title)
           })
       })
     }

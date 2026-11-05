@@ -387,15 +387,6 @@ export default struct newBookShelf{
                 this.bookInfoDel?.open()
                 this.delBookIds = book.id ?? 0
               })
-            } else {
-              Image(book.isJoin?$r('app.media.unadd_book_shelf'):$r('app.media.add_book_shelf'))
-                .width(20)
-                .height(20)
-                .onClick(()=>{
-                if (!book.isJoin) {
-                  showMessage('已加入书架')
-                }
-              })
             }
           }
           Text(book.intro)
@@ -408,24 +399,8 @@ export default struct newBookShelf{
             .height(50)
             .ellipsisMode(EllipsisMode.END)
             .maxLines(2).width('75%')
-          Row({
-            space:6
-          }){
-            Row(){
-              Text('卖报小郎君').fontSize(10).fontWeight(400).fontColor(this.theme.mainColor)
-            }
-            .padding({left:6,right:6,top:5,bottom:5}).backgroundColor(this.theme.secondColor).borderRadius(10)
-            Row(){
-              Text('玄幻').fontSize(10).fontWeight(400).fontColor('rgba(0, 0, 0, 0.45)')
-            }
-            .fontStyles()
-            Row(){
-              Text('完本').fontSize(10).fontWeight(400).fontColor('rgba(0, 0, 0, 0.45)')
-            }
-            .fontStyles()
-            Row(){
-              Text('380万字').fontSize(10).fontWeight(400).fontColor('rgba(0, 0, 0, 0.45)')
-            }.fontStyles()
+          if (book.author?.trim()) {
+            Text(book.author).fontSize(10).fontWeight(400).fontColor(this.theme.mainColor)
           }
         }
         .alignItems(HorizontalAlign.Start)
@@ -492,10 +467,4 @@ export default struct newBookShelf{
     alignment: DialogAlignment.Bottom,
     customStyle:true
   })
-}
-
-@Styles function fontStyles() {
-  .padding({left:6,right:6,top:5,bottom:5})
-  .backgroundColor('rgba(0, 0, 0, 0.06)')
-  .borderRadius(10)
 }

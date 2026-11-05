@@ -5,15 +5,20 @@ import { ThemeItem } from '../../../common/model/Theme'
 import localBookImportService, {
   LOCAL_BOOK_FILE_SUFFIX_FILTERS,
   LOCAL_BOOK_IMPORT_MAX_COUNT,
+  LOCAL_BOOK_DEFAULT_GROUP,
   LocalBookBatchImportResult,
   LocalBookImportCandidate,
   LocalBookImportScanResult,
   LocalBookImportStatus
 } from '../../../common/utils/LocalBookImportService'
 import { showMessage } from '../../../componets/common/promptShow'
+import { PRIVACY_BOOK_GROUP } from '../../../privacy/PrivacyFolderService'
+import privacySessionService from '../../../privacy/PrivacySessionService'
 
 interface LocalImportRouteParams {
   bookType: number
+  // 从隐私文件夹进入时默认存入隐私文件夹
+  toPrivacy?: boolean
 }
 
 enum LocalImportSortType {
@@ -30,6 +35,7 @@ struct LocalImportPage {
   @StorageLink('BOOK_IS_BOOK_REFRESHING') isBookRefreshing: number = 0
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   @State bookType: number = (router.getParams() as LocalImportRouteParams)?.bookType ?? 0
+  @State toPrivacy: boolean = (router.getParams() as LocalImportRouteParams)?.toPrivacy ?? false
   @State searchValue: string = ''
   @State sortType: LocalImportSortType = LocalImportSortType.NAME
   @State includeSubFolders: boolean = false
@@ -297,6 +303,17 @@ struct LocalImportPage {
       showMessage('没有可导入的书籍')
       return
     }
+    // 存入隐私文件夹前先做系统认证，认证失败不写入任何记录
+    const targetPrivacy = this.toPrivacy
+    if (targetPrivacy) {
+      if (privacySessionService.isAuthenticating()) {
+        return
+      }
+      if (!await privacySessionService.unlock()) {
+        showMessage(privacySessionService.getLastFailureMessage() || '认证失败，请重试')
+        return
+      }
+    }
     this.isImporting = true
     this.cancelRequested = false
     this.completed = 0
@@ -315,7 +332,9 @@ struct LocalImportPage {
           this.importTotal = total
           this.candidates = this.candidates.slice()
         },
-        (): boolean => this.cancelRequested)
+        (): boolean => this.cancelRequested,
+        undefined,
+        targetPrivacy ? PRIVACY_BOOK_GROUP : LOCAL_BOOK_DEFAULT_GROUP)
       this.completed = result.completed
       this.importTotal = result.selected
       this.candidates = this.candidates.slice()
@@ -328,7 +347,8 @@ struct LocalImportPage {
         this.isBookRefreshing++
         this.refreshSentForBatch = true
       }
-      showMessage(`导入完成：成功 ${result.imported}，重复 ${result.duplicate}，失败 ${result.failed}，取消 ${result.cancelled}`, 2500)
+      const target = targetPrivacy ? '隐私文件夹' : '书架'
+      showMessage(`已导入${target}：成功 ${result.imported}，重复 ${result.duplicate}，失败 ${result.failed}，取消 ${result.cancelled}`, 2500)
     } catch (_) {
       showMessage('批量导入未完成，请查看列表状态')
     } finally {
@@ -428,6 +448,29 @@ struct LocalImportPage {
           .enabled(localBookImportService.canPickDirectory() && !this.isScanning && !this.isImporting)
           .onChange((value: boolean) => {
             this.includeSubFolders = value
+          })
+      }
+      .width('100%')
+      Row({ space: 8 }) {
+        Image($r('app.media.privacy_lock'))
+          .width(18)
+          .height(18)
+          .fillColor(this.toPrivacy ? this.theme.mainColor : '#73000000')
+        Column({ space: 2 }) {
+          Text('存入隐私文件夹')
+            .fontSize(14)
+            .fontColor(this.toPrivacy ? this.theme.mainColor : '#73000000')
+          Text('不出现在书架，导入前需人脸/指纹认证')
+            .fontSize(11)
+            .fontColor('#59000000')
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.toPrivacy })
+          .selectedColor(this.theme.mainColor)
+          .enabled(!this.isImporting)
+          .onChange((value: boolean) => {
+            this.toPrivacy = value
           })
       }
       .width('100%')
@@ -600,7 +643,8 @@ struct LocalImportPage {
             .fontColor('#99000000')
         }
         .layoutWeight(1)
-        Button(this.isImporting ? (this.cancelRequested ? '取消中' : '取消') : '导入书架')
+        Button(this.isImporting ? (this.cancelRequested ? '取消中' : '取消') :
+          (this.toPrivacy ? '导入隐私' : '导入书架'))
           .width(116)
           .height(40)
           .fontSize(14)

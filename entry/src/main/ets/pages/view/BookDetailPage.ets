@@ -1,10 +1,6 @@
 import CommonConstants from '../../common/constants/CommonConstants'
 import { common } from '@kit.AbilityKit'
-import ReadRecordItem from '../../componets/bookDetail/ReadRecordItem'
-import TagIndex from '../../componets/bookDetail/TagIndex'
-import { router, SwipeRefresher } from '@kit.ArkUI'
-import NoteIndex from '../../componets/bookDetail/note/NoteIndex'
-import { FileHandler } from '../../common/utils/FileHandler'
+import { router } from '@kit.ArkUI'
 import { Books } from '../../database/entities/Books'
 import { BookHistory } from '../../database/entities/BookHistory'
 import bookHistoryUtils from '../../common/utils/BookHistoryUtils'
@@ -23,14 +19,6 @@ function titleImageStyle() {
 }
 
 /**
- * 分割线样式
- */
-@Extend(Divider)
-function recordDividerStyle() {
-  .vertical(true).width(0.5).height(24).color('#40ffffff')
-}
-
-/**
  * 加入书架dialog
  */
 @CustomDialog
@@ -42,7 +30,6 @@ struct AddBookShelfDialog {
       Image($r('app.media.ic_public_confirm')).width(24).height(24).fillColor('#FFFFFF')
       Text('加入书架成功').fontSize(14).fontWeight(400).lineHeight(22).fontColor('#FFFFFF')
       Blank()
-      Text('移入分组').fontSize(14).fontWeight(400).lineHeight(22).fontColor('#FF9500')
     }.height(56).width(CommonConstants.FULL_WIDTH).padding({
       left: 20,
       right: 20,
@@ -157,18 +144,6 @@ struct BookDetailPage {
             })
           }
         }.tabBar(this.catalogTab(0, '目录', this.CatalogList.length))
-
-        TabContent() {
-          Column() {
-            SwipeRefresher({
-              content: '书源加载中...', isLoading: true
-            })
-          }
-        }.tabBar(this.catalogTab(1, '书源', 24))
-
-        TabContent() {
-          NoteIndex()
-        }.tabBar(this.catalogTab(2, '笔记', 7))
       }.layoutWeight(1).onChange((index: number) => {
         this.currentIndex = index;
       })
@@ -258,17 +233,6 @@ struct BookDetailPage {
           })
           Text('书籍详情').fontColor(Color.White).fontSize(16)
         }.height(24)
-
-        Blank() // 右侧功能
-        Row({ space: 24 }) {
-          Image($r('app.media.ic_public_edit')).titleImageStyle().onClick(() => {
-            router.pushUrl({
-              url: '/pages/view/BookEditor/BookEditorPage'
-            })
-          })
-          Image($r('app.media.ic_public_share')).titleImageStyle()
-          Image($r('app.media.more')).titleImageStyle()
-        }.height(24)
       }.padding({
         left: 20,
         right: 20,
@@ -291,22 +255,11 @@ struct BookDetailPage {
             .fontColor(Color.White)
             .fontSize(20)
           Blank()
-          Row() {
-            Text(this.bookData.author ?? '卖报小郎君')
+          if (this.bookData.author?.trim()) {
+            Text(this.bookData.author)
               .fontSize(CommonConstants.FONT_NOVEL_DETAIL_AUTHOR_SIZE)
               .fontColor('#FFF')
               .opacity(0.45)
-            Image($r('app.media.ic_public_right'))
-              .width(CommonConstants.NOVEL_DETAIL_AUTHOR_IMG_SIZE)
-              .height(CommonConstants.FONT_NOVEL_DETAIL_AUTHOR_SIZE)
-              .fillColor('#FFF')
-              .opacity(0.45)
-          }
-
-          Row({ space: 8 }) {
-            TagIndex({ tag: '幻想修仙' })
-            TagIndex({ tag: '完本' })
-            TagIndex({ tag: '300万字' })
           }
         }.height(CommonConstants.NOVEL_IMG_HEIGHT).alignItems(HorizontalAlign.Start)
       }.padding({
@@ -316,33 +269,9 @@ struct BookDetailPage {
         bottom: 12
       }).width(CommonConstants.FULL_WIDTH).height(116)
 
-      // 阅读记录
-      Row() {
-        Row() {
-          ReadRecordItem()
-          Divider().recordDividerStyle()
-          ReadRecordItem({ count: 16, unit: '天', placeText: '阅读天数' })
-          Divider().recordDividerStyle()
-          ReadRecordItem({ count: 3, unit: '次', placeText: 'N刷次数' })
-        }
-        .borderRadius(12)
-        .padding({ top: 16, bottom: 16 })
-        .height(60)
-        .width(CommonConstants.FULL_WIDTH)
-        .backgroundColor('#14ffffff')
-      }.padding({
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: 12
-      }).width(CommonConstants.FULL_WIDTH).height(88)
-
       // 书籍简介
       Flex() {
-        Text(this.bookData.intro ??
-          '《大奉打更人》（第一卷）实体书已在天猫、当当、京东等全平台，以及各个实体书店发售。 这个世界，有儒；有道；有佛；有妖；有术士。 警校毕业的许七安幽幽醒来，发现自己身处牢狱之中，三日后流放边陲..... ' +
-            '\n他起初的目的只是自保，顺便在这个没有人权的社会里当个富家翁悠闲度日。 ...... 多年后，许七安回首前尘，身后是早已逝去的敌人，以及累累白骨。 ' +
-            '\n滚滚长江东逝水，浪花淘尽英雄，是非成败转头空。 ' + '\n青山依旧在，几度夕阳红。')
+        Text(this.bookData.intro?.trim() ? this.bookData.intro : '未提供简介')
           .fontColor('#FFFFFF')
           .fontSize(14)
           .fontWeight(400)

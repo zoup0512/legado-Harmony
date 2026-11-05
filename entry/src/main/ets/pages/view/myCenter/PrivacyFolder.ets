@@ -1,4 +1,4 @@
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { Books } from '../../../database/entities/Books';
 import privacyFolderService from '../../../privacy/PrivacyFolderService';
 import privacySessionService from '../../../privacy/PrivacySessionService';
@@ -30,6 +30,23 @@ export default struct PrivacyFolder {
   async aboutToAppear() {
     this.unlocked = privacySessionService.isUnlocked();
     if (this.unlocked) await this.loadBooks();
+  }
+
+  // 从导入页返回或从后台回到前台时，以会话状态为准：已上锁则清空列表
+  async onPageShow() {
+    this.unlocked = privacySessionService.isUnlocked();
+    if (this.unlocked) {
+      await this.loadBooks();
+    } else {
+      this.books = [];
+    }
+  }
+
+  openImport() {
+    router.pushUrl({
+      url: 'pages/view/bookShelf/LocalImportPage',
+      params: { bookType: 0, toPrivacy: true }
+    });
   }
 
   async unlock() {
@@ -68,6 +85,11 @@ export default struct PrivacyFolder {
           Text('🔒').fontSize(56);
           Text('私人阅读，独立保存').fontSize(20).fontWeight(FontWeight.Medium);
           Text('解锁后查看你的私密书籍与文稿').fontSize(14).fontColor('#777777');
+          Column({ space: 6 }) {
+            Text('· 人脸 / 指纹系统认证解锁').fontSize(13).fontColor('#555555');
+            Text('· 离开应用即自动上锁').fontSize(13).fontColor('#555555');
+            Text('· 不出现在普通书架中').fontSize(13).fontColor('#555555');
+          }.alignItems(HorizontalAlign.Start);
           Button(this.busy ? '认证中…' : '解锁').width('70%').enabled(!this.busy).onClick(() => this.unlock());
           Text('仅保护应用内副本，系统目录中的原文件不会被删除')
             .fontSize(12).fontColor('#999999').textAlign(TextAlign.Center);
@@ -75,8 +97,13 @@ export default struct PrivacyFolder {
       } else {
         Search({ value: this.searchKey, placeholder: '搜索私密书籍' })
           .onChange(async (value: string) => { this.searchKey = value; await this.loadBooks(); });
-        // 列表/宫格切换：图标常显靠右，当前模式高亮
+        // 左侧导入入口；右侧列表/宫格切换，当前模式高亮
         Row({ space: 18 }) {
+          Text('+ 导入书籍')
+            .fontSize(14)
+            .fontColor('#188BFF')
+            .onClick(() => this.openImport())
+          Blank()
           Image($r('app.media.view_list'))
             .width(22).height(22)
             .fillColor(this.EXHIBIT === '列表' ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.35)')
@@ -87,10 +114,12 @@ export default struct PrivacyFolder {
             .onClick(() => { this.EXHIBIT = '宫格' })
         }
         .width('100%')
-        .justifyContent(FlexAlign.End)
 
         if (this.books.length === 0) {
-          Text('暂无私密书籍').fontColor('#888888').layoutWeight(1).margin({ top: 60 });
+          Column({ space: 12 }) {
+            Text('暂无私密书籍').fontColor('#888888')
+            Button('导入本地书籍').onClick(() => this.openImport())
+          }.layoutWeight(1).margin({ top: 60 });
         } else {
           // 复用主页书架的书籍条目与布局（含封面角标、长按操作弹窗）
           List({ space: 10 }) {

@@ -1,5 +1,4 @@
-import { componentSnapshot, promptAction, router } from '@kit.ArkUI'
-import { image } from '@kit.ImageKit'
+import { router } from '@kit.ArkUI'
 import { emitter } from '@kit.BasicServicesKit'
 import { ThemeColor, ThemeStorageKey } from '../../../common/constants/Theme'
 import { ThemeColorItem, ThemeItem } from '../../../common/model/Theme'
@@ -20,7 +19,6 @@ struct CreateCustomTheme {
     ThemeColor.YELLOW,
   ]
   @StorageProp('screen_shot') previewIndexPage: PixelMap = {} as PixelMap
-  @State activeIndex: number = 0
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   originTheme: ThemeItem = {} as ThemeItem
@@ -115,29 +113,9 @@ struct CreateCustomTheme {
 
       // 底部选色区
       Row({space: 12}) {
-        Row() {
-          Image($r('app.media.my_theme_config_custom'))
-            .width(16)
-            .aspectRatio(1)
-            .fillColor('#858585')
-        }
-        .justifyContent(FlexAlign.Center)
-        .alignItems(VerticalAlign.Center)
-        .width(40)
-        .aspectRatio(1)
-        .borderRadius(20)
-        .backgroundColor('#f0f0f0')
-
-        Column() {
-
-        }
-        .height(40)
-        .width(1)
-        .backgroundColor('#f0f0f0')
-
         Scroll() {
           Row({space: 12}) {
-            ForEach(this.colorList, (item: ThemeItem, index) => {
+            ForEach(this.colorList, (item: ThemeItem) => {
               Row() {
 
               }

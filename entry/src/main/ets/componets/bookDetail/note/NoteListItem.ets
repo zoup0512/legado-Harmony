@@ -14,7 +14,7 @@ import { ThemeStorageKey } from '../../../common/constants/Theme';
 
 @Component
 export default struct NoteListItem {
-  private  noteVO: NoteVO = new NoteVO(1, '许七安幽幽醒来，嗅到了空气中潮湿的腐臭味，令人轻微的不适，胃酸翻涌', '2020-03-14 12:34');
+  private noteVO: NoteVO = new NoteVO(0, '', '');
   @State newPanelFlag: boolean = false;
   @State editPanelFlag: boolean = false;
   @State wordCount: number = 48;

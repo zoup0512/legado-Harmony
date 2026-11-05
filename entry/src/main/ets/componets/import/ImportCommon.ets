@@ -7,17 +7,14 @@
 import SideBar from '../common/SideBar';
 import { showMessage } from '../common/promptShow';
 import Score from '../common/Score';
-import Tag from '../common/Tag';
 import BookSourceDao from '../../database/dao/BookSourceDao';
 import { BookSource, GroupList, SOURCE_GROUP_MAP } from '../../database/entities/BookSource';
 import SourceGroup from '../ui/SourceGroup';
-import text from '@ohos.graphics.text';
 import { ThemeItem } from '../../common/model/Theme';
 import { ThemeStorageKey } from '../../common/constants/Theme';
 
 @Component
 export default struct ImportCommon {
-  @StorageProp('pathBookSource') pathBookSource: string = ''
   @State localSourceList: BookSource[] = []
   @Prop sourceList: BookSource[] = []
   @Link show: boolean;
@@ -27,7 +24,6 @@ export default struct ImportCommon {
   @State alreadyNameMap: Record<string, boolean> = {}
   @State updateNameMap: Record<string, boolean> = {}
   @State fullActive: boolean = false
-  @State waringActive: boolean = false
   @StorageLink('refreshCount') refreshCount: number = 0
   @State isShowGroup: boolean = false
   @State groupName: string = ''
@@ -50,7 +46,6 @@ export default struct ImportCommon {
     const groupMap: Record<string, GroupList> = {};
     this.sourceList.forEach((item: BookSource) => {
       const title = item.bookSourceGroup;
-      const bookSourceName = item.bookSourceName;
       if (item.bookSourceType >= 3){
         item.bookSourceType = 0 //SOURCE_GROUP_MAP中未有3的情况,会出现数组越界
       }
@@ -161,30 +156,6 @@ export default struct ImportCommon {
       .padding({ left: 20, right: 20 })
       .backgroundColor(Color.White)
 
-      Row() {
-        Image($r('app.media.warning'))
-          .width(20)
-          .fillColor(this.theme.mainColor)
-
-        Text('允许对书架中正在使用的书源进行更新')
-          .fontSize(14)
-          .fontColor('#EF4444')
-          .padding({ left: 8 })
-
-        Blank()
-
-        Checkbox()
-          .select(this.waringActive)
-          .selectedColor(this.theme.mainColor)
-          .onChange((val: boolean) => {
-            this.waringActive = val
-          })
-      }
-      .width('100%')
-      .height(48)
-      .padding({ left: 20, right: 20 })
-      .backgroundColor(this.theme.secondColor)
-
       Row({ space: 20 }) {
         Button('取消')
           .height(40)
@@ -282,10 +253,6 @@ export default struct ImportCommon {
           .fontSize(16)
           .lineHeight(24)
           .fontWeight(FontWeight.Medium)
-
-        if (i % 2 === 0) {
-          Tag({ text: '正在使用', color: '#24B277', bgColor: '#1F24B277' })
-        }
 
         Blank()
 

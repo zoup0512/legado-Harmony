@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.cer",
+          "certpath": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001A74D3B9C3D8DB09E15979E4DB9D8CFA3EDCFF6259B8B47C046273A95D80E651C6793F03C1F930",
-          "profile": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.p7b",
+          "keyPassword": "0000001BFF7DE7028EB349B5FDA7C7C397D339D948CE2C9D7A3F8CF8F21171B7D52BFFCADFE2B634D27CA8",
+          "profile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.p12",
-          "storePassword": "0000001A8EA0A5A548857DAF8334F4C6A990BD8C480CB137757F81DE5E883E8DBA373A69419375DB977C"
+          "storeFile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p12",
+          "storePassword": "0000001B6EDC9512A454B8126A97DF1A3231827CDBE3C01B910EBDCD70DFC4CB83AA1811711F836BF64430"
         }
       }
     ],

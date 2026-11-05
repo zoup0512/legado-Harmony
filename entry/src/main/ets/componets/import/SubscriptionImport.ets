@@ -6,7 +6,6 @@
  */
 import SideBar from '../common/SideBar';
 import { showMessage } from '../common/promptShow';
-import Tag from '../common/Tag';
 import subscriptionDao from '../../database/dao/SubscriptionDao';
 import { rssGroupList, rssSources } from '../../database/entities/rssSources';
 import SubscriptionDao from '../../database/dao/SubscriptionDao';
@@ -29,7 +28,6 @@ export default struct SubscriptionImport {
   @State alreadyNameMap: Record<string, boolean> = {}
   @State updateNameMap: Record<string, boolean> = {}
   @State fullActive: boolean = false
-  @State waringActive: boolean = false
   private scroll: Scroller = new Scroller()
   private secondScroll = new Scroller()
   @State sourceGroup: string = ''
@@ -47,7 +45,6 @@ export default struct SubscriptionImport {
   }
 
   async getRssSourceList() {
-    // this.sourceGroupList = programDataPreferences.getRssSourcesListData()
     this.sourceGroupList = await rssSourcesUtils.getRssSourcesGroup();
   }
 
@@ -106,8 +103,6 @@ export default struct SubscriptionImport {
     this.currentIndex = 0
   }
 
-  @State isBatch: boolean = false
-
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -140,12 +135,6 @@ export default struct SubscriptionImport {
           this.scrollChangeAction(start, false)
         })
         .layoutWeight(1)
-        .gesture(
-          LongPressGesture({ repeat: false, duration: 500 })
-            .onAction((event: GestureEvent) => {
-              this.isBatch = true
-            })
-        )
       }
       .layoutWeight(1)
 
@@ -286,10 +275,6 @@ export default struct SubscriptionImport {
           .fontSize(16)
           .lineHeight(24)
           .fontWeight(FontWeight.Medium)
-
-        if (i % 2 === 0) {
-          Tag({ text: '正在使用', color: '#24B277', bgColor: '#1F24B277' })
-        }
 
         Blank()
 
@@ -443,26 +428,5 @@ export default struct SubscriptionImport {
     customStyle: false,
     cornerRadius: 25
   })
-  @State isInsert: boolean = false
-  // async addGroupType(){
-  //   let group = await rssSourcesUtils.getRssSourcesGroup();
-  //   group.map((data:string)=>{
-  //     if(data === this.newGroupType){
-  //       this.isInsert = true
-  //     }
-  //   })
-  //   if (this.isInsert) {
-  //     showMessage('分组名称重复')
-  //     this.isInsert = false
-  //   } else {
-  //     rssSourcesUtils.insertRssSourceGroup(this.newGroupType)
-  //     //添加分组后再次刷新分组列表
-  //     setTimeout(()=>{
-  //       this.getRssSourceList()
-  //     },200)
-  //     showMessage(`添加分组${this.newGroupType}成功!`)
-  //   }
-  //   this.newGroupType = ''
-  // }
 }
 

@@ -3,7 +3,6 @@ import BookMark from '../../../componets/head/BookMark'
 import { router } from '@kit.ArkUI'
 import BookBodyContent from './components/BookBodyContent'
 import { FileHandler } from '../../../common/utils/FileHandler'
-import Dialog from '../../../componets/common/Dialog'
 import { showMessage } from '../../../componets/common/promptShow'
 import { bookShelfImport } from '../../../database/entities/Books'
 import { getPasteDataSync, isNetworkUrl, sleep } from '../../../common/utils/utils'
@@ -23,7 +22,6 @@ export default struct IndexShelf {
   @State @Watch('changeGroup') GROUP: string = '标签'
   private moreList: IconTitleVo[] = [
     new IconTitleVo($r('app.media.import_svg'), '书籍导入'),
-    new IconTitleVo($r('app.media.down_svg'), '下载管理'),
     new IconTitleVo($r('app.media.import_book_svg'), '导入书单'),
     new IconTitleVo($r('app.media.batch_svg'), '批量管理'),
   ]
@@ -36,7 +34,6 @@ export default struct IndexShelf {
   }
 
   @State isShowImport: boolean = false
-  @State isShowCloudImport: boolean = false
   @State isShowImportBookList: boolean = false
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageProp('APP_INDEX_SCROLLABLE') APP_INDEX_SCROLLABLE: boolean = false
@@ -44,17 +41,6 @@ export default struct IndexShelf {
   @State bookImport: bookShelfImport[] = []
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
-  // 网址导入dialog
-  dialogController: CustomDialogController = new CustomDialogController({
-    builder: Dialog({
-      title: '网址导入',
-      child: () => {
-        this.DialogInput("请输入书籍目录或详情页")
-      }
-    }),
-    cornerRadius: 8,
-    offset: { dx: 0, dy: 0 }
-  })
   tabsController: TabsController = new TabsController();
   private scrollController: Scroller = new Scroller();
 
@@ -101,22 +87,6 @@ export default struct IndexShelf {
           }
           .width(0)
           .height(0)
-          .bindSheet($$this.isShowCloudImport, this.CloudImportDialog(), {
-            // 网盘导入弹窗绑定元素
-            height: 240,
-            showClose: false,
-            dragBar: false,
-            backgroundColor: "white",
-            blurStyle: BlurStyle.COMPONENT_ULTRA_THIN,
-            onDisappear: () => {
-              // this.clickBookType = ''
-            }
-          })
-
-          Flex() {
-          }
-          .width(0)
-          .height(0)
           .bindSheet($$this.isShowImportBookList, this.ImportBookListDialog(), {
             // 书单导入弹窗绑定元素
             height: 240,
@@ -130,6 +100,14 @@ export default struct IndexShelf {
           })
 
           Row({ space: 16 }) {
+            // 隐私文件夹入口：书架常驻露出
+            Image($r('app.media.privacy_lock')).width(24)
+              .accessibilityText('隐私文件夹')
+              .onClick(() => {
+                router.pushUrl({
+                  url: 'pages/view/myCenter/PrivacyFolder'
+                });
+              })
             Image($r('app.media.search')).width(24).onClick(() => {
               router.pushUrl({
                 url: 'pages/view/search/SearchBook'
@@ -243,14 +221,6 @@ export default struct IndexShelf {
             }
           })
           break
-        case 1:
-          // 云盘导入
-          this.isShowCloudImport = true
-          break
-        case 2:
-          // 网址导入
-          this.dialogController.open();
-          break
         case 3:
           // 书单粘贴导入
           this.pasteBookImport()
@@ -275,7 +245,7 @@ export default struct IndexShelf {
           }, 500)
           break
         case 5:
-          // 服务器书架：在线阅读 reader-dev 服务器上的书
+          // 服务器书架：下载服务器书籍后阅读
           this.isShowImport = false
           router.pushUrl({
             url: 'pages/view/ServerShelf/ServerShelfPage'
@@ -290,18 +260,10 @@ export default struct IndexShelf {
   ImportDialog() {
     Column() {
       GridRow({
-        columns: 4
+        columns: 2
       }) {
         GridCol() {
           this.ImportClickBox(0, "app.media.my_center_file_icon", "本地导入")
-        }
-
-        GridCol() {
-          this.ImportClickBox(1, "app.media.my_center_cloud_icon", "网盘导入")
-        }
-
-        GridCol() {
-          this.ImportClickBox(2, "app.media.official_website", "网址导入")
         }
 
         GridCol() {
@@ -324,127 +286,6 @@ export default struct IndexShelf {
         top: 16
       })
     }
-  }
-
-  @Builder
-  DialogInput(placeholder: string, maxlength?: number) {
-    Row() {
-      TextInput({ placeholder: placeholder })// .maxLength(maxlength)
-        // .showCounter(true)
-        .cancelButton({
-          icon: {
-            src: $r('app.media.close')
-          }
-        })
-    }
-    .margin({
-      top: 16,
-      bottom: 16
-    })
-  }
-
-  @Builder
-  // 书籍导入-网盘导入弹窗
-  CloudImportDialog() {
-    Column() {
-      Row() {
-        Text("网盘导入")
-          .lineHeight(24)
-          .font({
-            size: 16,
-            weight: 500
-          })
-      }
-      .padding({
-        top: 12,
-        bottom: 12,
-      })
-
-      Divider()
-
-      Row({ space: 16 }) {
-        Flex({
-          wrap: FlexWrap.Wrap,
-          alignContent: FlexAlign.Center,
-          justifyContent: FlexAlign.Center
-        }) {
-          Text("坚")
-            .lineHeight(24)
-            .font({
-              size: 16,
-              weight: 500
-            })
-            .opacity(0.45)
-        }
-        .backgroundColor("rgba(0, 0, 0, 0.04)")
-        .width(40)
-        .height(40)
-
-        Text("坚果云")
-          .lineHeight(22)
-          .font({
-            size: 14,
-            weight: 500
-          })
-          .opacity(0.88)
-      }
-      .padding({
-        top: 12,
-        bottom: 12,
-      })
-      .width("100%")
-      .onClick(() => {
-
-      })
-
-      Row({ space: 16 }) {
-        Flex({
-          wrap: FlexWrap.Wrap,
-          alignContent: FlexAlign.Center,
-          justifyContent: FlexAlign.Center
-        }) {
-          Image($r('app.media.add')).width(24)
-
-        }
-        .backgroundColor("rgba(0, 0, 0, 0.04)")
-        .width(40)
-        .height(40)
-
-        Text("添加webdav网盘")
-          .lineHeight(22)
-          .font({
-            size: 14,
-            weight: 500
-          })
-          .opacity(0.88)
-      }
-      .padding({
-        top: 12,
-        bottom: 12,
-      })
-      .width("100%")
-      .onClick(() => {
-
-      })
-
-      Divider()
-
-      Column() {
-        Text('取消').fontSize(16).fontWeight(400)
-          .lineHeight(24)
-      }
-      .onClick(() => {
-        this.isShowCloudImport = false
-      })
-      .alignItems(HorizontalAlign.Center)
-      .padding({
-        top: 16
-      })
-    }
-    .padding({
-      left: 20,
-      right: 20
-    })
   }
 
   @Builder
@@ -497,16 +338,10 @@ export default struct IndexShelf {
         this.isShowImport = true
         break
       case 1:
-        // 下载管理页
-        router.pushUrl({
-          url: 'pages/view/bookShelf/DownloadManagementPage'
-        });
-        break
-      case 2:
         // 导入书单弹窗
         this.isShowImportBookList = true
         break
-      case 3:
+      case 2:
         router.pushUrl({
           url: 'pages/view/bookShelf/Manage/BookManagePage',
           params: {

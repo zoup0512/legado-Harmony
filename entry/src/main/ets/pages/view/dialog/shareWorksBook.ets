@@ -4,7 +4,6 @@
  * @className: shareShelfBook
  */
 import InsideCircleIcon from '../../../componets/common/InsideCircleIcon'
-import { buttonList } from '../../../componets/dataList/buttonList'
 import componentSnapshot from '@ohos.arkui.componentSnapshot'
 import image from '@ohos.multimedia.image'
 import fs from '@ohos.file.fs';
@@ -24,16 +23,6 @@ import PaddingConstants from '../../../common/constants/PaddingConstants'
 export default struct shareWorksBook {
   controller?: CustomDialogController
   @Prop works:WorksLists
-  @State buttonListInfo: buttonList[] = [
-    new buttonList(1, '微信', $r('app.media.wechat')),
-    new buttonList(2, 'QQ', $r('app.media.QQ_blue')),
-    new buttonList(3, '朋友圈', $r('app.media.circle_friends')),
-    new buttonList(4, 'QQ空间', $r('app.media.QQ_space')),
-    new buttonList(5, '导出本地', $r('app.media.export')),
-    new buttonList(6, '复制链接', $r('app.media.copy_link')),
-    new buttonList(7, '保存图片', $r('app.media.save_img')),
-    new buttonList(8, '系统分享', $r('app.media.more'))
-  ]
   @State bookList:Books[] = []
 
   async aboutToAppear(): Promise<void> {
@@ -132,58 +121,12 @@ export default struct shareWorksBook {
         }
         .padding({ top: 12, bottom: 28 })
 
-        Flex({
-          direction: FlexDirection.Row, wrap: FlexWrap.Wrap,
-          justifyContent: FlexAlign.Start
-        }) {
-
-        }
-        GridRow({
-          columns:4
-        }){
-          ForEach(this.buttonListInfo, (item: buttonList) => {
-            GridCol(){
-              InsideCircleIcon({
-                icon: item.icon,
-                title:item.title
-              }).onClick(() => {
-                switch (item.id) {
-                  case 1:
-                    showMessage('跳转微信');
-                    break;
-                  case 2:
-                    showMessage('跳转QQ');
-                    break;
-                  case 3:
-                    showMessage('跳转朋友圈');
-                    break;
-                  case 4:
-                    showMessage('跳转QQ空间');
-                    break;
-                  case 5:
-                    showMessage('导出本地成功');
-                    break;
-                  case 6:
-                    showMessage('已复制链接');
-                    break;
-                  case 7:
-                    this.requestPermissionSaveImage();
-                    break;
-                  case 8:
-                    showMessage('系统分享');
-                    break;
-                }
-              })
-            }
-          })
-        }
-
-        Column() {
-          this.footerTitle()
-        }
-        .borderRadius(8)
-        .margin({ left: 20, right: 20, bottom: 20 })
-        .backgroundColor($r('app.color.share_shelf_book_background'))
+        InsideCircleIcon({
+          icon: $r('app.media.save_img'),
+          title: '保存图片'
+        }).onClick(() => {
+          this.requestPermissionSaveImage();
+        })
       }
       .zIndex(3)
       .borderRadius({ topLeft: 20, topRight: 20 })
@@ -220,36 +163,6 @@ export default struct shareWorksBook {
     }
   }
 
-  @State validDate:string = '7天有效'
-  @State footerDialogShow:boolean = false
-  @Builder footerTitle(){
-    Flex({
-      direction:FlexDirection.Row,
-      justifyContent:FlexAlign.SpaceBetween
-    }){
-      Text('链接有效期').fontColor($r('app.string.color_black_88')).fontSize(12).fontWeight(400).lineHeight(20).textAlign(TextAlign.Center)
-      Row({
-        space:8
-      }){
-        Text(this.validDate).fontColor($r('app.string.color_black_45')).fontSize(12).fontWeight(400)
-        Image($r('app.media.icon_right')).width(24).height(24).fillColor(($r('app.string.color_black_45')))
-      }
-    }
-    .onClick(()=>{
-      this.footerDialogShow = true
-    })
-    .bindSheet($$this.footerDialogShow,this.footerDialog(), {
-      height:200,
-      showClose: false,
-      blurStyle:BlurStyle.COMPONENT_ULTRA_THIN,
-      maskColor: 'rgba(0,0,0,0.6)',
-      onDisappear:()=>{
-        this.footerDialogShow = false
-      }
-    })
-    .padding(16)
-  }
-
   @Builder footerSaveImage(){
     Flex({
       justifyContent:FlexAlign.SpaceBetween,
@@ -272,64 +185,6 @@ export default struct shareWorksBook {
     .padding({ top: 24,bottom:24, left: 20, right: 20 })
   }
 
-
-  @Builder footerDialog(){
-    Column(){
-      Text('链接有效日期')
-        .fontColor($r('app.string.color_black_88'))
-        .textAlign(TextAlign.Center)
-        .padding({top:12,bottom:12})
-        .lineHeight(24)
-        .fontWeight(500)
-    }
-    Column(){
-      Flex({
-        justifyContent:FlexAlign.SpaceBetween,
-        alignItems:ItemAlign.Center
-      }
-      ){
-        Text('7天')
-          .fontColor($r('app.string.color_black_88'))
-          .textAlign(TextAlign.Center)
-          .padding({top:12,bottom:12})
-          .lineHeight(24)
-          .fontWeight(500)
-
-        Image(this.validDate === '7天有效'?$r('app.media.hook'):'').width(24).height(24)
-      }
-      .onClick(()=>{
-        this.validDate = '7天有效'
-        this.footerDialogShow = false
-        showMessage('修改成功')
-      })
-      Flex({
-        justifyContent:FlexAlign.SpaceBetween,
-        alignItems:ItemAlign.Center
-      }
-      ){
-        Text('永久有效')
-          .fontColor($r('app.string.color_black_88'))
-          .textAlign(TextAlign.Center)
-          .padding({top:12,bottom:12})
-          .lineHeight(24)
-          .fontWeight(500)
-        Image(this.validDate === '永久有效'?$r('app.media.hook'):'').width(24).height(24)
-      }
-      .onClick(()=>{
-        this.validDate = '永久有效'
-        this.footerDialogShow = false
-        showMessage('修改成功')
-      })
-    }.padding({left:20,right:20})
-
-    Column(){
-      Text('取消').fontSize($r('app.string.color_black_88')).textAlign(TextAlign.Center).fontSize(16).fontWeight(400).lineHeight(24)
-    }.padding({left:32,right:32,top:16,bottom:16})
-    .onClick(()=>{
-      this.footerDialogShow = false
-    })
-
-  }
 
   @Builder BookShelfInfo(book:Books,index:number){
     Column(){
@@ -362,11 +217,8 @@ export default struct shareWorksBook {
             .height(50)
             .ellipsisMode(EllipsisMode.END)
             .maxLines(2)
-          Row(){
-            Text('卖报小郎君·').fontSize(10).fontWeight(400).fontColor($r('app.string.color_black_45'))
-            Text('玄幻·').fontSize(10).fontWeight(400).fontColor($r('app.string.color_black_45'))
-            Text('完本·').fontSize(10).fontWeight(400).fontColor($r('app.string.color_black_45'))
-            Text('380万字').fontSize(10).fontWeight(400).fontColor($r('app.string.color_black_45'))
+          if (book.author?.trim()) {
+            Text(book.author).fontSize(10).fontWeight(400).fontColor($r('app.string.color_black_45'))
           }
         }
       }

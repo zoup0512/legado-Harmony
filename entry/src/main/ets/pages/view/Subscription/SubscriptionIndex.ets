@@ -24,8 +24,6 @@ import { rssSourcesHistory } from '../../../database/entities/rssSourcesHistory'
 import { FileHandler } from 'ets/common/utils/FileHandler'
 import { ThemeItem } from '../../../common/model/Theme'
 import { ThemeStorageKey } from '../../../common/constants/Theme'
-import addBookTypeDialog from '../../../componets/common/addBookTypeDialog'
-import rssSourcesUtils from '../../../common/utils/rssSourcesUtils'
 import dialogTitleFuction from '../../../componets/common/dialogTitleFuction'
 
 @Component
@@ -49,7 +47,6 @@ export default struct SubscriptionIndex {
   @State rssSourcesList: rssSources[] = []
   @State groupList: rssGroupList[] = []
   @State batchEdit: boolean = false
-  @State newGroupType: string = ''
   //全选
   @Provide('batchAll') batchAll: boolean = false
   // 主题颜色
@@ -79,7 +76,9 @@ export default struct SubscriptionIndex {
       const rssSources = data ?? []
       console.info('TagInfo', JSON.stringify(rssSources.slice(0, 3)))
       this.rssSourcesList = rssSources
-      //将rssSources的id存放进batchList值默认为false
+      // 仅保留当前列表的可选项，避免刷新后残留已删除的 id。
+      this.batchList = {}
+      this.batchAll = false
       rssSources.forEach((item: rssSources) => {
         if (item.id) {
           this.batchList[item.id] = false
@@ -227,52 +226,6 @@ export default struct SubscriptionIndex {
         Grid() {
           GridItem() {
             Column({ space: 4 }) {
-              Image($r('app.media.folder'))
-                .height(24)
-                .fillColor(Color.Black) // 黑色好像渲染不上去
-
-              Text("移动至")
-                .fontSize(10)
-                .lineHeight(18)
-                .fontColor('rgba(0, 0, 0, 0.88)')
-            }
-            .onClick(() => {
-              showMessage('功能开发中,暂未开放')
-            })
-          }
-
-          GridItem() {
-            Column({ space: 4 }) {
-              Image($r('app.media.edit_share'))
-                .height(24)
-
-              Text("分享")
-                .fontSize(10)
-                .lineHeight(18)
-                .fontColor('rgba(0, 0, 0, 0.88)')
-            }
-            .onClick(() => {
-              showMessage('功能开发中,暂未开放')
-            })
-          }
-
-          GridItem() {
-            Column({ space: 4 }) {
-              Image($r('app.media.export_1'))
-                .height(24)
-
-              Text("导出")
-                .fontSize(10)
-                .lineHeight(18)
-                .fontColor('rgba(0, 0, 0, 0.88)')
-            }
-            .onClick(() => {
-              showMessage('功能开发中,暂未开放')
-            })
-          }
-
-          GridItem() {
-            Column({ space: 4 }) {
               Image($r('app.media.delete'))
                 .height(24)
 
@@ -281,31 +234,27 @@ export default struct SubscriptionIndex {
                 .lineHeight(18)
                 .fontColor('rgba(0, 0, 0, 0.88)')
             }
-            .onClick(() => {
-              let checkRssSources = Object.values(this.batchList).filter(value => value === true).length
-              if (checkRssSources <= 0) {
-                showMessage('请选择要删除的订阅源');
-                return;
+            .onClick(async () => {
+              const selectedSources = this.rssSourcesList.filter(item => item.id !== undefined && this.batchList[item.id])
+              if (selectedSources.length === 0) {
+                showMessage('请选择要删除的订阅源')
+                return
               }
-
-              Object.keys(this.batchList).forEach((key: string) => {
-                if (this.batchList[key]) {
-                  subscriptionDao.deleteRssSourcesById({
-                    id: Number(key)
-                  })
-                  this.batchList[key] = false
+              for (const source of selectedSources) {
+                if (source.id !== undefined) {
+                  await subscriptionDao.deleteRssSourcesById({ id: source.id })
                 }
-              })
-              setTimeout(() => {
-                this.refresh()
-              }, 200)
+              }
+              this.batchList = {}
+              this.batchAll = false
+              this.refresh()
               showMessage('删除成功!')
             })
           }
         }
         .height(68)
         .width("100%")
-        .columnsTemplate("1fr 1fr 1fr 1fr")
+        .columnsTemplate("1fr")
         .backgroundColor('white')
         .padding({
           top: 12,

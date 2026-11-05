@@ -30,12 +30,10 @@ export default struct SubscriptionContent{
   @Prop subscriptionTitle: string
   @Prop contentList: rssSources[] = []
   @State isButtonFunction: boolean = false
-  @State contentIndex:number = 0
+  @State contentIndex:number = -1
   @Prop batchEdit: boolean
-  @Consume('batchAll') batchAll: boolean
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   @Consume('batchList') batchList: Record<number, boolean>
-  // controller: web_webview.WebviewController = new web_webview.WebviewController()
   refresh: () => void = () => {
 
   }
@@ -80,39 +78,20 @@ export default struct SubscriptionContent{
               })
           }.alignItems(VerticalAlign.Bottom)
 
-          Image($r('app.media.more'))
-            .fillColor($r('app.string.color_black_45'))
-            .width(ImageConstants.IMG_WIDTH_24)
-            .height(ImageConstants.IMG_HEIGHT_24)
-            .bindMenu(
-              this.rightDialogBuilder(this.Item_Right_Dialog_Data, async (index: number) => {
-                switch (index) {
-                  case 0:
-                    showMessage('重命名')
-                    break
-                  case 1:
-                    showMessage('置顶')
-                    break
-                  case 2:
-                    this.isShowGroup = true
-                    break
-                  case 3:
-                    SubscriptionDao.deleteRssSourcesList(this.contentList)
-                    setTimeout(()=>{
-                      this.refresh()
-                    },200)
-                    showMessage('删除成功')
-                    break
-                }
-              }),
-              {
-                onDisappear: () => {
-
-                }
-              })
-            .onClick(() => {
-
-            })
+          if (this.subscriptionTitle.indexOf('收藏') === -1 && this.contentList.length > 0) {
+            Image($r('app.media.more'))
+              .fillColor($r('app.string.color_black_45'))
+              .width(ImageConstants.IMG_WIDTH_24)
+              .height(ImageConstants.IMG_HEIGHT_24)
+              .bindMenu(
+                this.rightDialogBuilder(this.Item_Right_Dialog_Data, async (action: string) => {
+                  if (action === '删除') {
+                    const success = await SubscriptionDao.deleteRssSourcesList(this.contentList)
+                    showMessage(success ? '删除成功' : '删除失败')
+                    this.refresh()
+                  }
+                }))
+          }
         }
         if (this.contentList.length === 0 && this.subscriptionTitle === '收藏'){
           Flex({
@@ -198,7 +177,6 @@ export default struct SubscriptionContent{
             }
           })
         }
-        // Web({ src: this.contentList[0].sourceUrl, controller: this.controller })
 
       }
       .margin({top: PaddingConstants.PADDING_12})
@@ -288,7 +266,7 @@ export default struct SubscriptionContent{
       RssSourceGroup({
         moveGroup:this.moveGroup,
         confirm:()=>{
-          if (this.contentIndex === undefined){
+          if (!this.contentList[this.contentIndex]) {
             showMessage('数据丢失请重新选择')
             return
           }
@@ -320,9 +298,6 @@ export default struct SubscriptionContent{
   }
 
   Item_Right_Dialog_Data: IconTitleVo[] = [
-    new IconTitleVo($r('app.media.ic_public_edit'), '重命名'),
-    new IconTitleVo($r('app.media.icon_operate_top'), '置顶'),
-    new IconTitleVo($r('app.media.icon_operate_move'), '移动至'),
     new IconTitleVo($r('app.media.delete_svg'), '删除'),
   ]
 
@@ -340,15 +315,19 @@ export default struct SubscriptionContent{
       GridRow({
         columns:4
       }){
-       ForEach(this.Item_Dialog_Data,(item:IconTitleVo,index:number)=>{
+       ForEach(this.Item_Dialog_Data,(item:IconTitleVo)=>{
          GridCol(){
            CircleIcon({
              item:item
            })
          }
          .onClick(()=>{
-           switch (index) {
-             case 0 :
+           if (!this.contentList[this.contentIndex]) {
+             showMessage('数据丢失请重新选择')
+             return
+           }
+           switch (item.title) {
+             case '编辑':
                switch (this.contentList[this.contentIndex].sourceType){
                  case 0:
                    this.isShowNewSourcesNetwork = true
@@ -358,13 +337,13 @@ export default struct SubscriptionContent{
                    break
                }
                break
-             case 1:
+             case '置顶':
                this.isTopRssSources()
                break
-             case 2:
+             case '移动至':
                this.isShowGroup = true
                break
-             case 3:
+             case '删除':
                 this.rssSourcesDelDialog?.open()
                break
            }
@@ -421,37 +400,19 @@ export default struct SubscriptionContent{
 
 
   @Builder
-  rightDialogBuilder(list: IconTitleVo[], dialogRightChange: (_index: number) => void) {
-    Flex({
-      justifyContent:FlexAlign.Start,
-      direction:FlexDirection.Column
-    }){
-      ForEach(list, (item: IconTitleVo, index) => {
-        if (this.subscriptionTitle.indexOf('收藏') === -1){
-          dialogTitleFuction({
-            title: item.title,
-            icon: item.icon,
-            isBorder: list.length !== index + 1
+  rightDialogBuilder(list: IconTitleVo[], dialogRightChange: (action: string) => void) {
+    Column() {
+      ForEach(list, (item: IconTitleVo, index: number) => {
+        dialogTitleFuction({
+          title: item.title,
+          icon: item.icon,
+          isBorder: list.length !== index + 1
+        })
+          .onClick(() => {
+            dialogRightChange(item.title)
           })
-            .onClick(() => {
-              dialogRightChange(index)
-            })
-        } else {
-          if (item.title !== '重命名' && item.title !== '删除') {
-            dialogTitleFuction({
-              title: item.title,
-              icon: item.icon,
-              isBorder: list.length !== index + 1
-            })
-              .onClick(() => {
-                dialogRightChange(index)
-              })
-          }
-        }
-
       })
     }
-
   }
   colorCheck:string[] = ['#FFE5D4','#FFE3ED','#FCDFDF','#E2F4E4','#FFE5D4','#FFE3ED']
   @Builder

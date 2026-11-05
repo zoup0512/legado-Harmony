@@ -134,7 +134,7 @@ class BookSourceDao {
 
       sql += ` ORDER BY`;
       if (order !== undefined) {
-        sql += ` ${order === 0 ? 'bookSourceGroup' : 'lastUpdateTime'} DESC`
+        sql += ` ${order === 0 ? 'CAST(bookSourceScore AS REAL)' : 'lastUpdateTime'} DESC`
       } else {
         sql += ` isTop DESC, customOrder ASC`;
       }

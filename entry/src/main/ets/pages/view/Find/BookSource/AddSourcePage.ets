@@ -1,11 +1,8 @@
 import Header from '../../../../componets/common/Header';
 import { showMessage } from '../../../../componets/common/promptShow';
-import { dataItem } from '../../../../componets/dataList/dataItem';
 import Help from '../../../../componets/dialog/help';
-import { sourceTabs } from '../../../../componets/source/sourceTabs';
 import { router } from '@kit.ArkUI';
 import FormItem from '../../../../componets/Form/FormItem';
-import SourceDebug from './components/SourceDebug';
 import { JSON } from '@kit.ArkTS';
 import BookSourceDao from '../../../../database/dao/BookSourceDao';
 import { BookSource, BOOK_SOURCE_TYPE, GRADE_TYPE, SOURCE_GROUP_MAP,
@@ -15,28 +12,18 @@ import { ThemeStorageKey } from '../../../../common/constants/Theme';
 
 interface RouteParams {
   id: string,
-  type?: number
 }
 
 @Entry
 @Component
 @Preview
 struct AddSourcePage {
-  titleArray: string[] = ['小说', '漫画', '有声书']
-  dialogRightData: string[] = ['搜索源码', '书籍源码', '目录源码', '正文源码', '帮助']
-  @StorageProp('pathBookSource') pathBookSource: string = ''
+  dialogRightData: string[] = ['帮助']
   @State isShowHelp: boolean = false
-  @State sourceList: dataItem[] = [
-    new dataItem("编辑", 1),
-    new dataItem("调试", 2)
-  ]
-  @State @Watch('onReadChange') readIndex: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @State currentIndex: number = 0
-  @State isDebug: boolean = false
   private scroller: Scroller = new Scroller()
   private controller: TabsController = new TabsController()
-  private headController: TabsController = new TabsController()
   @State formModel: BookSource = {
     bookSourceName: '',
     bookSourceUrl: '',
@@ -65,91 +52,53 @@ struct AddSourcePage {
     if (localItem) {
       this.formModel = localItem
     }
-    this.isDebug = params.type === 1
-    if (params.type === 1) {
-      this.readIndex = 1
-      this.headController.changeIndex(1)
-    }
-  }
-
-  onReadChange() {
-    console.log(this.readIndex + '')
-    this.headController.changeIndex(this.readIndex)
   }
 
   build() {
     Column() {
       Header({
-        customTitleBuilder: () => {
-          this.titleBuilder()
-        },
+        title: '编辑书源',
         rightIcon: $r('app.media.more_vertical'),
         dialogRightData: this.dialogRightData,
         dialogRightChange: (index: number) => {
-          switch (index) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-              showMessage(this.dialogRightData[index]);
-              break;
-            case 4:
-              this.isShowHelp = true;
-              break;
+          if (this.dialogRightData[index] === '帮助') {
+            this.isShowHelp = true
           }
         }
       })
 
-      Tabs({ barPosition: BarPosition.Start, index: this.readIndex, controller: this.headController }) {
+      Tabs({ barPosition: BarPosition.Start, index: this.currentIndex, controller: this.controller }) {
         TabContent() {
-          Column() {
-            Tabs({ barPosition: BarPosition.Start, index: this.currentIndex, controller: this.controller }) {
-              TabContent() {
-                this.baseForm()
-              }
-              .tabBar(this.tabBuilder(0, '基本'))
-
-              TabContent() {
-                this.searchForm()
-              }.tabBar(this.tabBuilder(1, '搜索'))
-
-              TabContent() {
-                this.exploreForm()
-              }.tabBar(this.tabBuilder(2, '发现'))
-
-              TabContent() {
-                this.bookInfoForm()
-              }.tabBar(this.tabBuilder(3, '详情'))
-
-              TabContent() {
-                this.tocForm()
-              }.tabBar(this.tabBuilder(4, '目录'))
-
-              TabContent() {
-                this.contextForm()
-              }.tabBar(this.tabBuilder(5, '正文'))
-            }
-            .vertical(false)
-            .barMode(BarMode.Fixed)
-            .barHeight(48)
-            .animationDuration(400)
-            .onChange((index: number) => {
-              this.currentIndex = index
-            })
-          }
-          .layoutWeight(1)
-        }.layoutWeight(1)
+          this.baseForm()
+        }.tabBar(this.tabBuilder(0, '基本'))
 
         TabContent() {
-          SourceDebug()
-        }.layoutWeight(1)
+          this.searchForm()
+        }.tabBar(this.tabBuilder(1, '搜索'))
+
+        TabContent() {
+          this.exploreForm()
+        }.tabBar(this.tabBuilder(2, '发现'))
+
+        TabContent() {
+          this.bookInfoForm()
+        }.tabBar(this.tabBuilder(3, '详情'))
+
+        TabContent() {
+          this.tocForm()
+        }.tabBar(this.tabBuilder(4, '目录'))
+
+        TabContent() {
+          this.contextForm()
+        }.tabBar(this.tabBuilder(5, '正文'))
       }
-      .barWidth(0)
-      .barHeight(0)
+      .vertical(false)
+      .barMode(BarMode.Fixed)
+      .barHeight(48)
+      .animationDuration(400)
       .layoutWeight(1)
-      .scrollable(false)
       .onChange((index: number) => {
-        this.readIndex = index
+        this.currentIndex = index
       })
 
       Divider()
@@ -171,7 +120,6 @@ struct AddSourcePage {
           .layoutWeight(1)
           .onClick(async () => {
             if (!this.formModel.bookSourceName || !this.formModel.bookSourceUrl) {
-              this.readIndex = 0
               this.currentIndex = 0
               this.controller.changeIndex(0)
               this.scroller.scrollEdge(Edge.Top)
@@ -953,16 +901,6 @@ struct AddSourcePage {
         // .backgroundImageSize(this.currentIndex === index ? { width: '100%', height: 15 } : {})
         // .backgroundImagePosition({ y: 16 })
     }
-  }
-
-  @Builder
-  titleBuilder() {
-    sourceTabs({
-      sourceList: this.sourceList,
-      read_index: this.readIndex,
-      marginY: 0
-    })
-      .width('50%')
   }
 
   @Builder

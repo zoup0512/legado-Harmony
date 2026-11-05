@@ -2,7 +2,6 @@ import CommonConstants from '../../../../common/constants/CommonConstants'
 import FontConstants from '../../../../common/constants/FontConstants'
 import ImageConstants from '../../../../common/constants/ImageConstants'
 import PaddingConstants from '../../../../common/constants/PaddingConstants'
-import TextConstants from '../../../../common/constants/TextConstants'
 import { ThemeStorageKey } from '../../../../common/constants/Theme'
 import { ThemeItem } from '../../../../common/model/Theme'
 import { isNetworkUrl } from '../../../../common/utils/utils'
@@ -16,8 +15,6 @@ import SubscriptionDao from '../../../../database/dao/SubscriptionDao'
 import { rssSources, SUBSCRIPTION_GROUP_TYPE } from '../../../../database/entities/rssSources'
 import { rssListRule } from '../../../../database/entities/rule/rssListRule'
 import { rssWebViewRule } from '../../../../database/entities/rule/rssWebViewRule'
-import programDataPreferences from '../../../../preferences/programDataPreferences'
-import SourceDebug from '../../Find/BookSource/components/SourceDebug'
 import PreviewEffectImage from '../components/PreviewEffectImage'
 import RssSourceCheckImage from '../components/RssSourceCheckImage'
 import rssSourcesHelp from '../components/rssSourcesHelp'
@@ -30,8 +27,6 @@ export default struct newSources{
   @State currentIndex: number = 0
   @Prop isEdit:boolean = false
   private controller: TabsController = new TabsController()
-  private headController: TabsController = new TabsController()
-  @State readIndex: number = 0
 
 
   build() {
@@ -41,15 +36,7 @@ export default struct newSources{
           justifyContent:FlexAlign.SpaceBetween,
           alignItems:ItemAlign.Center
         }){
-          if (this.readIndex===1){
-            Image($r('app.media.return_left'))
-              .width(25)
-              .height(25)
-              .onClick(()=>{
-                this.headController.changeIndex(0)
-              })
-          }
-          Text(this.readIndex===0?`${this.isEdit?'编辑':'新建'}订阅源`:'调试源')
+          Text(`${this.isEdit?'编辑':'新建'}订阅源`)
             .fontSize(FontConstants.FONT_SIZE_18)
             .fontWeight(FontConstants.FONT_WEIGHT_500)
             .lineHeight(26)
@@ -59,28 +46,7 @@ export default struct newSources{
           Row({
             space:20
           }){
-            Row({
-              space: 4
-            }){
-              if (this.readIndex === 0){
-                Image($r('app.media.icon_dubug'))
-                  .fillColor($r('app.string.color_black_88'))
-                  .width(ImageConstants.IMG_WIDTH_20)
-                  .height(ImageConstants.IMG_HEIGHT_20)
-                Text('调试')
-                  .font({
-                    size: FontConstants.FONT_SIZE_14,
-                    weight: FontConstants.FONT_WEIGHT_400,
-                    family: CommonConstants.FAMILY_PingFANG
-                  })
-                  .fontColor($r('app.string.color_black_88'))
-                  .lineHeight(22)
-              }
-            }
-            .onClick(()=>{
-              this.headController.changeIndex(1)
-            })
-            Image(this.readIndex === 0?$r('app.media.more'):$r('app.media.more_translate'))
+            Image($r('app.media.more'))
               .fillColor($r('app.string.color_black_88'))
               .width(ImageConstants.IMG_WIDTH_24)
               .height(ImageConstants.IMG_HEIGHT_24)
@@ -107,45 +73,28 @@ export default struct newSources{
               })
           }
         }
-        Tabs({ barPosition: BarPosition.Start, index: this.readIndex, controller: this.headController }) {
+        Tabs({ barPosition: BarPosition.Start, index: this.currentIndex, controller: this.controller }) {
           TabContent() {
-            Column() {
-              Tabs({ barPosition: BarPosition.Start, index: this.currentIndex, controller: this.controller }) {
-                TabContent() {
-                  this.baseForm()
-                }
-                .tabBar(this.tabBuilder(0, '基本'))
-
-                TabContent() {
-                  this.rssListForm()
-                }.tabBar(this.tabBuilder(1, '列表'))
-
-                TabContent() {
-                  this.rssWebViewForm()
-                }.tabBar(this.tabBuilder(2, 'WEB VIEW'))
-
-              }
-              .vertical(false)
-              .barMode(BarMode.Fixed)
-              .barHeight(48)
-              .animationDuration(400)
-              .onChange((index: number) => {
-                this.currentIndex = index
-              })
-            }
-            .layoutWeight(1)
-          }.layoutWeight(1)
+            this.baseForm()
+          }
+          .tabBar(this.tabBuilder(0, '基本'))
 
           TabContent() {
-            SourceDebug() //todo 需要写一个订阅源页面
-          }.layoutWeight(1)
+            this.rssListForm()
+          }.tabBar(this.tabBuilder(1, '列表'))
+
+          TabContent() {
+            this.rssWebViewForm()
+          }.tabBar(this.tabBuilder(2, 'WEB VIEW'))
+
         }
-        .barWidth(0)
-        .barHeight(0)
+        .vertical(false)
+        .barMode(BarMode.Fixed)
+        .barHeight(48)
+        .animationDuration(400)
         .layoutWeight(1)
-        .scrollable(false)
         .onChange((index: number) => {
-          this.readIndex = index
+          this.currentIndex = index
         })
       }
       .layoutWeight(1)
@@ -158,7 +107,6 @@ export default struct newSources{
         confirm: async ()=>{
           if (!this.formModel.sourceName || !this.formModel.sourceUrl) {
             this.scroller.scrollEdge(Edge.Top)
-            this.readIndex = 0
             this.currentIndex = 0
             this.controller.changeIndex(0)
             showMessage('红星标记的内容不能为空')
@@ -248,7 +196,6 @@ export default struct newSources{
     if (!this.formModel.rssWebViewRule) {
       this.formModel.rssWebViewRule = new rssWebViewRule()
     }
-    this.readIndex = 0
   }
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
@@ -704,115 +651,17 @@ export default struct newSources{
     }
   }
 
-  Item_Right_MORE_Dialog_Data: string[] = ['清除Cookie','自动补全','拷贝源','粘贴源','设置原变量','字符串分享','帮助']
-  Item_Right_Debug_MORE_Dialog_Data: string[] = ['列表源码','正文源码']
-
-  dialogMoreRightChange(index: number) {
-    if (this.readIndex === 0) {
-      switch (index) {
-        case 0:
-          showMessage('清除Cookie')
-          break
-        case 2:
-          showMessage('拷贝源')
-          break
-        case 3:
-          showMessage('粘贴源')
-          break
-        case 4:
-          showMessage('设置原变量')
-          break
-        case 5:
-          showMessage('字符串分享')
-          break
-        case 6:
-          this.isShowHelp = true
-          showMessage('帮助')
-          break
-      }
-    } else {
-      switch (index) {
-        case 0:
-          showMessage('列表源码')
-          break
-        case 1:
-          showMessage('正文源码')
-          break
-      }
-    }
-  }
-
   @Builder
   rightMoreDialogBuilder() {
     Column() {
-      if (this.readIndex === 0) {
-        // 订阅源
-        ForEach(this.Item_Right_MORE_Dialog_Data, (item: string, index) => {
-          if (index === 1) {
-            this.toggleBuilder(item)
-          } else {
-            dialogTitleFuction({
-              title: item,
-              isBorder: this.Item_Right_MORE_Dialog_Data.length !== index + 1
-            })
-              .onClick(() => {
-                this.dialogMoreRightChange(index)
-              })
-          }
+      dialogTitleFuction({ title: '帮助', isBorder: false })
+        .onClick(() => {
+          this.isShowMenu = false
+          this.isShowHelp = true
         })
-      } else {
-        // 调试源
-        ForEach(this.Item_Right_Debug_MORE_Dialog_Data, (item: string, index) => {
-          dialogTitleFuction({
-            title: item,
-            isBorder: this.Item_Right_Debug_MORE_Dialog_Data.length !== index + 1
-          })
-            .onClick(() => {
-              this.dialogMoreRightChange(index)
-            })
-        })
-      }
     }
     .alignItems(HorizontalAlign.Start)
   }
-
-  @Builder
-  toggleBuilder(title:string) {
-    Column() {
-      Row({
-        space:5
-      }){
-        Text(title)
-          .font({
-            size:FontConstants.FONT_SIZE_14,
-            weight:FontConstants.FONT_WEIGHT_400,
-            family:CommonConstants.FAMILY_PingFANG
-          })
-          .fontColor($r('app.string.color_black_88'))
-          .lineHeight(TextConstants.TEXT_LINE_HEIGHT_22)
-        Toggle({ type: ToggleType.Switch, isOn: this.formModel.autoComplete})
-          .selectedColor(this.theme.mainColor)
-          .margin({ left: 8 })
-          .onChange((val: boolean) => {
-            this.formModel.autoComplete = val
-          })
-      }
-      .border({
-        style: BorderStyle.Solid,
-        width: 1,
-        color: '#f5f5f5'
-      })
-      .padding({
-        top:PaddingConstants.PADDING_12,
-        bottom:PaddingConstants.PADDING_12})
-      .alignItems(VerticalAlign.Center)
-      .justifyContent(FlexAlign.Center)
-    }
-    .padding({
-      left:PaddingConstants.PADDING_20,
-      right:PaddingConstants.PADDING_20,})
-  }
-
 
   @Builder
   dialogHelpFuction() {

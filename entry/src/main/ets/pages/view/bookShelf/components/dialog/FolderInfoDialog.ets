@@ -16,9 +16,7 @@ import coverInfoDialog from './coverInfoDialog'
  */
 export default struct FolderInfoDialog{
   controller?: CustomDialogController
-  //推送提醒
   @Prop itemData:BookGroups
-  @State pushReminder:boolean = false
   @State buttonListInfo:buttonList[] = [
     new buttonList(1,'重命名',$r('app.media.edit')),
     new buttonList(2,'置顶',$r('app.media.top')),
@@ -50,19 +48,6 @@ export default struct FolderInfoDialog{
         Column(){
           Text(this.itemData.groupName).fontColor('rgba(0, 0, 0, 0.88)').fontSize(16).fontWeight(500).lineHeight(24)
           Text(`共${this.itemData.bookIds?.length||0}本`).fontColor('rgba(0, 0, 0, 0.45)').fontWeight(400).lineHeight(20).fontSize(12)
-        }
-        Row(){
-          Text('更新提醒')
-          Toggle({ type: ToggleType.Switch, isOn: this.itemData.canUpdate})
-            .selectedColor("#F60").hoverEffect(HoverEffect.None)
-            .onChange((val)=>{
-              this.itemData.canUpdate = val
-              bookGroupUtil.updatePartialGroup(this.itemData)
-              setTimeout(()=>{
-                this.BOOK_IS_BOOK_GROUPS_REFRESHING++
-                showMessage('修改成功!')
-              },100)
-            })
         }
       }.padding(20)
       Divider().strokeWidth(0.5).padding({bottom:16})

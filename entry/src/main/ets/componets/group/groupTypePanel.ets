@@ -76,8 +76,8 @@ export default struct groupTypePanel {
               } else {
                 this.GroupType(item.groupName)
               }
-              if (this.isShowIcon) {
-                Image(!item.isSystem ? $r('app.media.clear') : $r('app.media.sort'))
+              if (this.isShowIcon && !item.isSystem) {
+                Image($r('app.media.clear'))
                   .width(12)
                   .height(12)
                   .offset({ x: -20, y: -20 })
@@ -91,20 +91,6 @@ export default struct groupTypePanel {
               }
             }
             .width('25%')
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.dragIndex = index // 获取当前拖拽子组件的索引
-                console.info('onTouch' + this.dragIndex)
-              }
-            })
-            .draggable(this.isShowIcon)
-            .onDragStart(() => {
-              console.log('onDragStart')
-            })
-            .onDrop((event: DragEvent, extraParams: string) => {
-              console.log('onDrop')
-              this.changeIndex(this.dragIndex, index, 0)
-            })
             .onClick(() => {
               this.clickGroup = item
               this.isShowBookFolderInfoDialog = true
@@ -140,7 +126,7 @@ export default struct groupTypePanel {
         Flex({
           direction: FlexDirection.Row, wrap: FlexWrap.Wrap, alignContent: FlexAlign.Center
         }) {
-          ForEach(this.hideList, (item: BookGroups, index: number) => {
+          ForEach(this.hideList, (item: BookGroups) => {
             Row() {
               this.GroupType(item.groupName)
               if (this.isShowIcon) {
@@ -154,20 +140,6 @@ export default struct groupTypePanel {
                   })
               }
             }
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.dragIndex = index // 获取当前拖拽子组件的索引
-                console.info('onTouch' + this.dragIndex)
-              }
-            })
-            .draggable(this.isShowIcon)
-            .onDragStart(() => {
-              console.log('onDragStart')
-            })
-            .onDrop((event: DragEvent, extraParams: string) => {
-              console.log('onDrop')
-              this.changeIndex(this.dragIndex, index, 1)
-            })
             .onClick(() => {
               this.clickGroup = item
               this.isShowBookFolderInfoDialog = true
@@ -239,17 +211,6 @@ export default struct groupTypePanel {
 
   onAccept() {
     this.tagLockDialog?.close()
-  }
-
-  @State dragIndex: number = 0
-
-  changeIndex(index1: number, index2: number, type: number = 2) { // 交换数组位置
-    if (!this.isShowIcon) {
-      showMessage('请在管理状态下拖到改变顺序')
-      return
-    }
-    console.log('changeIndex' + index1 + ',' + index2)
-    //TODO 更新排序顺序到数据库中sort
   }
 
   @Builder
