@@ -2,6 +2,7 @@ import BooksDao from '../../database/dao/BooksDao'
 import { Books, BOOK_SEARCH_TYPE } from '../../database/entities/Books'
 import bookGroupUtils from './bookGroupUtils'
 import toolsUtils from './ToolsUtils'
+import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants'
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard'
 
 class booksUtils{
@@ -49,7 +50,7 @@ class booksUtils{
     generation: number = capturePrivacyGeneration()): Promise<boolean> {
     try {
       const bookIds = toolsUtils.numberArrays(id)
-      const privateOperation = group === 99 || await BooksDao.isPrivateBookIds(bookIds)
+      const privateOperation = group === PRIVACY_BOOK_GROUP || await BooksDao.isPrivateBookIds(bookIds)
       if (privateOperation && !isPrivacyGenerationValid(generation)) return false
       const oldGroups = await BooksDao.getBookIdsByGroupId(bookIds)
       if (privateOperation && !isPrivacyGenerationValid(generation)) return false

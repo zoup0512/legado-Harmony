@@ -13,6 +13,7 @@ import BrightnessUtil from '../../../../common/utils/BrightnessUtil';
 import { requireReadableLocalBookPath } from '../../../common/utils/LocalBookAccess';
 import BooksDao from '../../../database/dao/BooksDao';
 import privacySessionService from '../../../privacy/PrivacySessionService';
+import { PageAccessRefresh } from '../../../privacy/PageAccessRefresh';
 
 interface ParamsObj {
   bookData: Books,
@@ -76,9 +77,7 @@ struct ReaderPage3 {
   @State privacyError: string = ''
   private privacyRequired: boolean = true;
   private privacyGeneration: number = -1;
-  private accessRequestId: number = 0;
-  private accessRefreshing: boolean = false;
-  private refreshRequested: boolean = false;
+  private accessRefresh: PageAccessRefresh = new PageAccessRefresh();
   private pageActive: boolean = false;
   private pageReady: boolean = false;
   private readerStarted: boolean = false;
@@ -143,10 +142,14 @@ struct ReaderPage3 {
 
   onPageHide(): void {
     this.pageActive = false;
-    this.accessRequestId++;
+    this.accessRefresh.invalidate();
     if (this.privacyRequired) {
       this.coverPrivateReader();
     }
+  }
+
+  private get accessRequestId(): number {
+    return this.accessRefresh.getRequestId();
   }
 
   private canReadCurrentBook(): boolean {
@@ -165,7 +168,7 @@ struct ReaderPage3 {
   }
 
   private coverPrivateReader(): void {
-    this.accessRequestId++;
+    this.accessRefresh.invalidate();
     this.privacyCovered = true;
     this.privacyChecking = false;
     this.privacyGeneration = -1;
@@ -177,41 +180,39 @@ struct ReaderPage3 {
   }
 
   private async refreshReaderAccess(): Promise<void> {
-    if (!this.pageReady || !this.pageActive) {
-      return;
-    }
-    if (this.accessRefreshing) {
-      this.refreshRequested = true;
-      return;
-    }
-    this.accessRefreshing = true;
-    this.refreshRequested = false;
-    const requestId = ++this.accessRequestId;
+    if (!this.pageReady || !this.pageActive) return;
     const generation = privacySessionService.getGeneration();
+    await this.accessRefresh.refresh(generation, privacySessionService.isUnlocked(),
+      (requestId: number): Promise<boolean> => this.refreshReaderAccessRequest(requestId, generation));
+  }
+
+  private async refreshReaderAccessRequest(requestId: number, generation: number): Promise<boolean> {
+    if (!this.pageReady || !this.pageActive || generation !== privacySessionService.getGeneration()) return false;
     this.privacyCovered = true;
     this.privacyChecking = true;
     this.privacyError = '';
     this.isShowSetting = false;
     this.isShowCatalogDialog = false;
-    this.releaseReader();
     try {
       const required = await BooksDao.isPrivateBook(this.bookData);
       if (!this.pageActive || requestId !== this.accessRequestId ||
         generation !== privacySessionService.getGeneration()) {
-        return;
+        return false;
       }
       this.privacyRequired = required;
       this.privacyGeneration = generation;
       if (required && !privacySessionService.isUnlocked()) {
         this.coverPrivateReader();
-        return;
+        return false;
       }
       this.privacyCovered = false;
-      if (!this.readerStarted) {
+      if (!this.readerStarted || this.readerLoading || this.readerError.length > 0) {
+        this.releaseReader();
         await this.startPlay(this.bookData.bookUrl ?? '',
           this.bookData.localBookDurChapterPos?.resourceIndex ?? 0,
           this.bookData.localBookDurChapterPos?.startDomPos ?? '', requestId);
       }
+      return this.canReadCurrentBook() && requestId === this.accessRequestId && this.readerStarted;
     } catch (_) {
       if (requestId === this.accessRequestId) {
         this.privacyRequired = true;
@@ -219,17 +220,13 @@ struct ReaderPage3 {
         this.privacyError = '无法确认书籍访问权限，请返回后重试';
         this.releaseReader();
       }
+      return false;
     } finally {
       if (requestId === this.accessRequestId) {
         this.privacyChecking = false;
-      }
-      this.accessRefreshing = false;
-      if (this.refreshRequested && this.pageActive) {
-        this.refreshRequested = false;
-        this.refreshReaderAccess();
-      } else if (this.pageActive && this.privacyCovered) {
-        this.privacyChecking = false;
-        if (!this.privacyError) this.privacyError = '请解锁后继续阅读';
+        if (this.pageActive && this.privacyCovered && !this.privacyError) {
+          this.privacyError = '请解锁后继续阅读';
+        }
       }
     }
   }
@@ -381,7 +378,7 @@ struct ReaderPage3 {
   aboutToDisappear(): void {
     this.pageActive = false;
     this.pageReady = false;
-    this.accessRequestId++;
+    this.accessRefresh.invalidate();
     this.unsubscribePrivacy?.();
     this.unsubscribePrivacy = undefined;
     WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());

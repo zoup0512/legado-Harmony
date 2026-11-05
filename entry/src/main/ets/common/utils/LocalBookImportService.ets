@@ -7,6 +7,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import BooksDao from '../../database/dao/BooksDao';
 import { Books } from '../../database/entities/Books';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
+import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants';
 
 export const LOCAL_BOOK_FILE_SUFFIX_FILTERS: string[] = ['.txt', '.epub', '.mobi', '.azw', '.azw3'];
 export const LOCAL_BOOK_IMPORT_MAX_COUNT: number = 500;
@@ -327,7 +328,7 @@ export class LocalBookImportService {
       }
     }
     batchResult.selected = selectedCandidates.length;
-    const privacyAllowed = (): boolean => bookGroup !== 99 || isPrivacyGenerationValid(privacyGeneration);
+    const privacyAllowed = (): boolean => bookGroup !== PRIVACY_BOOK_GROUP || isPrivacyGenerationValid(privacyGeneration);
     // Do not even begin the batch's private metadata work without the original session.
     const state = privacyAllowed() ? await this.loadImportState() : new LocalBookImportState();
     for (let index = 0; index < selectedCandidates.length; index++) {
@@ -627,7 +628,7 @@ export class LocalBookImportService {
   private async importOne(context: common.UIAbilityContext, candidate: LocalBookImportCandidate, bookType: number,
     state: LocalBookImportState, requestId: string, bookGroup: number,
     privacyGeneration: number = capturePrivacyGeneration()): Promise<LocalBookImportResult> {
-    const privacyAllowed = (): boolean => bookGroup !== 99 || isPrivacyGenerationValid(privacyGeneration);
+    const privacyAllowed = (): boolean => bookGroup !== PRIVACY_BOOK_GROUP || isPrivacyGenerationValid(privacyGeneration);
     const verifyPrivacy = (): void => {
       if (!privacyAllowed()) throw new Error('Privacy session expired');
     };

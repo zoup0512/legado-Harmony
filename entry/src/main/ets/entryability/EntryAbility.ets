@@ -6,7 +6,8 @@ import { AbilityConstant, Configuration, Want } from '@kit.AbilityKit';
 import display from '@ohos.display';
 import DbUtil from '../common/utils/DbUtil';
 import DataBase from '../database'
-import { webview } from '@kit.ArkWeb';
+import { promptAction } from '@kit.ArkUI';
+import { loadPrivacyProtectedContent } from '../privacy/PrivacyWindowStartup';
 import { themeManager, ThemeManager } from '../common/utils/ThemeManager';
 import { AppUtil } from '@pura/harmony-utils';
 import { WindowAbility } from './WindowAbility';
@@ -17,6 +18,7 @@ import privacyCredentialService from '../privacy/PrivacyCredentialService';
 
 export default class EntryAbility extends UIAbility {
   private curBp: string = ''
+  private windowStage: window.WindowStage | undefined;
 
   // 根据当前窗口尺寸更新断点
   private updateBreakpoint(windowWidth: number): void {
@@ -41,8 +43,6 @@ export default class EntryAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
     privacyCredentialService.init(this.context);
-    // 保留本地 ReaderKit 排版可能使用的底层引擎初始化，不创建 WebView 或发起网络请求。
-    webview.WebviewController.initializeWebEngine()
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate');
     AppUtil.init(this.context);
     WindowAbility.getInstance().initContext(this.context)
@@ -53,6 +53,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage) {
+    this.windowStage = windowStage;
     // 初始化db数据库/创建相关数据表
     DbUtil.initDB(this.context).then(() => {
       DataBase.initAllTable()
@@ -119,15 +120,37 @@ export default class EntryAbility extends UIAbility {
       });
     })
 
-    windowStage.loadContent('/pages/welcomePage'.slice(1), (err, data) => {
-      if (err.code) {
-        hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
-        return;
+    this.loadProtectedContent(windowStage);
+  }
+
+  private async loadProtectedContent(windowStage: window.WindowStage): Promise<void> {
+    try {
+      await loadPrivacyProtectedContent(async (): Promise<void> => {
+        const mainWindow = await windowStage.getMainWindow();
+        if (this.windowStage !== windowStage) return;
+        // Keep protection on for the whole window, including PIN entry and background transitions.
+        await mainWindow.setWindowPrivacyMode(true);
+      }, (): boolean => this.windowStage === windowStage, (): void => {
+        windowStage.loadContent('pages/welcomePage', (err, data) => {
+          if (this.windowStage !== windowStage) return;
+          if (err.code) {
+            hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
+            return;
+          }
+          themeManager.init();
+          hilog.info(0x0000, 'testTag', 'Succeeded in loading the content. Data: %{public}s', JSON.stringify(data) ?? '');
+        });
+      });
+    } catch (_) {
+      if (this.windowStage !== windowStage) return;
+      privacySessionService.lock();
+      hilog.error(0x0000, 'testTag', 'Privacy window protection failed; application content was not loaded.');
+      try {
+        await promptAction.showToast({ message: '无法启用系统隐私保护，请关闭并重新打开应用' });
+      } catch (_) {
+        // Never fall back to loading sensitive content without native protection.
       }
-      // 主题初始化
-      themeManager.init()
-      hilog.info(0x0000, 'testTag', 'Succeeded in loading the content. Data: %{public}s', JSON.stringify(data) ?? '');
-    });
+    }
   }
 
   onConfigurationUpdate(newConfig: Configuration): void {
@@ -150,6 +173,8 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageDestroy() {
+    this.windowStage = undefined;
+    privacySessionService.lock();
     // Main window is destroyed, release UI related resources
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageDestroy');
   }

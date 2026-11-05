@@ -5,39 +5,51 @@ import AppDatabaseUtil from '../AppDatabaseUtil';
 import { Books } from '../entities/Books';
 import { BooksTypeSearchParams } from '../types/BooksType';
 import { ColumnInfo } from '../types/ColumnInfo';
-import { LocalBookAccessLogic } from '../../common/utils/LocalBookAccess';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
+import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants';
+import { PrivacyBookIdentity, PrivacyOwnershipLookup } from '../../privacy/PrivacyOwnershipLookup';
+
+// Leave room for the group predicate below SQLite's bind-parameter limit.
+const PRIVACY_ID_QUERY_CHUNK_SIZE: number = 500;
 
 class BooksDao {
   TABLE_NAME: string = 'books'
 
-  // These two authorization queries deliberately propagate errors: unknown is not public.
+  // Authorization queries deliberately propagate errors: unknown is not public.
   async hasPrivacyBooks(): Promise<boolean> {
     if (!DbUtil.rdbStore) throw new Error('Privacy ownership database unavailable');
     const predicates = DbUtil.getPredicates(this.TABLE_NAME);
-    predicates.equalTo('bookGroup', 99);
+    predicates.equalTo('bookGroup', PRIVACY_BOOK_GROUP).limitAs(1);
     const column = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['id']);
     return (await DbUtil.queryForList<Books>(predicates, column)).length > 0;
   }
 
-  async isPrivateBook(book: Books): Promise<boolean> {
-    if (book.bookGroup === 99) return true;
+  // Callers own this snapshot for one operation; never retain it on the DAO or session.
+  async loadPrivacyOwnership(): Promise<PrivacyOwnershipLookup> {
     if (!DbUtil.rdbStore) throw new Error('Privacy ownership database unavailable');
     const predicates = DbUtil.getPredicates(this.TABLE_NAME);
-    predicates.equalTo('bookGroup', 99);
-    const column = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['id', 'bookUrl', 'bookGroup']);
-    const privateBooks = await DbUtil.queryForList<Books>(predicates, column);
-    const path = LocalBookAccessLogic.localPathOf(book.bookUrl);
-    return privateBooks.some(stored =>
-      (book.id !== undefined && stored.id === book.id) ||
-      (path.length > 0 && LocalBookAccessLogic.localPathOf(stored.bookUrl) === path));
+    predicates.equalTo('bookGroup', PRIVACY_BOOK_GROUP);
+    const column = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['id', 'bookUrl']);
+    return new PrivacyOwnershipLookup(await DbUtil.queryForList<PrivacyBookIdentity>(predicates, column));
   }
 
+  async isPrivateBook(book: Books): Promise<boolean> {
+    if (book.bookGroup === PRIVACY_BOOK_GROUP) return true;
+    return (await this.loadPrivacyOwnership()).isPrivateBook({
+      id: book.id, bookUrl: book.bookUrl, bookGroup: book.bookGroup
+    });
+  }
+
+  // Direct persisted IDs only: unlike book/history checks, this does not expand path aliases.
   async isPrivateBookIds(ids: number[]): Promise<boolean> {
-    for (const id of ids) {
-      const identity = new Books();
-      identity.id = id;
-      if (await this.isPrivateBook(identity)) return true;
+    if (ids.length === 0) return false;
+    const column = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['id']);
+    for (let offset = 0; offset < ids.length; offset += PRIVACY_ID_QUERY_CHUNK_SIZE) {
+      if (!DbUtil.rdbStore) throw new Error('Privacy ownership database unavailable');
+      const predicates = DbUtil.getPredicates(this.TABLE_NAME);
+      predicates.equalTo('bookGroup', PRIVACY_BOOK_GROUP);
+      predicates.in('id', ids.slice(offset, offset + PRIVACY_ID_QUERY_CHUNK_SIZE)).limitAs(1);
+      if ((await DbUtil.queryForList<Books>(predicates, column)).length > 0) return true;
     }
     return false;
   }
@@ -64,7 +76,7 @@ class BooksDao {
 
   async search(param?:BooksTypeSearchParams) {
     const generation = capturePrivacyGeneration();
-    if (param?.bookGroup === 99 && !isPrivacyGenerationValid(generation)) return [];
+    if (param?.bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return [];
     let searchKey = (param?.searchKey ?? '').replace(/'/g, "''");
     let type = param?.type;
     let bookGroup = param?.bookGroup;
@@ -78,9 +90,9 @@ class BooksDao {
       let sql = `SELECT * FROM ${this.TABLE_NAME}`;
       // 动态添加 WHERE 子句
       let whereClause: string[] = [];
-      // Group 99 is reserved for the privacy folder and must stay out of normal queries.
-      if (bookGroup !== 99) {
-        whereClause.push(`bookGroup != 99`);
+      // The privacy folder must stay out of normal queries.
+      if (bookGroup !== PRIVACY_BOOK_GROUP) {
+        whereClause.push(`bookGroup != ${PRIVACY_BOOK_GROUP}`);
       }
       if (type !== undefined) {
         whereClause.push(`bookType = ${type}`);
@@ -118,7 +130,7 @@ class BooksDao {
       }
 
       const bookDbList = await DbUtil.querySqlForList<Books>(sql, column);
-      if (bookGroup === 99 && !isPrivacyGenerationValid(generation)) return [];
+      if (bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return [];
       console.log("TagInfo", '书籍：' + bookDbList.length)
       return bookDbList
     } catch (err) {
@@ -130,21 +142,21 @@ class BooksDao {
   //获取书籍总数量
   async getBookCount(param?: BooksTypeSearchParams) {
     const generation = capturePrivacyGeneration();
-    if (param?.bookGroup === 99 && !isPrivacyGenerationValid(generation)) return 0;
+    if (param?.bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return 0;
     let type = param?.type;
     let bookGroup = param?.bookGroup;
     try {
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
       if (type !== undefined) predicates.equalTo('bookType', type)
-      if (bookGroup !== 99) predicates.notEqualTo('bookGroup', 99)
+      if (bookGroup !== PRIVACY_BOOK_GROUP) predicates.notEqualTo('bookGroup', PRIVACY_BOOK_GROUP)
       if (bookGroup === 4) {
         predicates.beginWrap().equalTo('bookGroup', 4).or().equalTo('isLocalBook', true).endWrap()
       } else if (bookGroup !== undefined && bookGroup !== 2) {
         predicates.equalTo('bookGroup', bookGroup)
       }
       const count = await DbUtil.queryForCount(predicates, column)
-      if (bookGroup === 99 && !isPrivacyGenerationValid(generation)) return 0;
+      if (bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return 0;
       return count
     } catch (e){
       console.log("TagInfo", JSON.stringify(e))
@@ -154,7 +166,7 @@ class BooksDao {
 
   async searchPage(param?: BooksTypeSearchParams, pageNumber: number = 1, pageSize: number = 21) {
     const generation = capturePrivacyGeneration();
-    if (param?.bookGroup === 99 && !isPrivacyGenerationValid(generation)) return [];
+    if (param?.bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return [];
     let searchKey = (param?.searchKey ?? '').replace(/'/g, "''");
     let type = param?.type;
     let bookGroup = param?.bookGroup;
@@ -172,8 +184,8 @@ class BooksDao {
       if (type !== undefined) {
         whereClause.push(`bookType = ${type}`);
       }
-      if (bookGroup !== 99) {
-        whereClause.push(`bookGroup != 99`);
+      if (bookGroup !== PRIVACY_BOOK_GROUP) {
+        whereClause.push(`bookGroup != ${PRIVACY_BOOK_GROUP}`);
       }
       if (bookGroup !== undefined && bookGroup !== 2) {
         if (bookGroup === 4) {
@@ -215,7 +227,7 @@ class BooksDao {
       sql += ` LIMIT ${pageSize} OFFSET ${offset}`;
 
       const bookDbList = await DbUtil.querySqlForList<Books>(sql, column);
-      if (bookGroup === 99 && !isPrivacyGenerationValid(generation)) return [];
+      if (bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return [];
       console.log("TagInfo", '书籍：' + bookDbList.length)
       return bookDbList;
     } catch (err) {
@@ -248,7 +260,7 @@ class BooksDao {
         if (count > 0) return await this.update(books, generation);
       }
       if (!await this.canWriteBook(books, generation)) return false;
-      if (books.bookGroup === 99 && !isPrivacyGenerationValid(generation)) return false;
+      if (books.bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return false;
       books.createTime = Date.now();
       books.id = await DbUtil.insert(this.TABLE_NAME, books, column);
       // Report a committed insert even if lock arrived during the database await.
@@ -268,7 +280,7 @@ class BooksDao {
       const count = await DbUtil.queryForCount(predicates, column);
       if (count === 0 && books instanceof Books) return await this.insert(books, generation);
       if (!await this.canWriteBook(books, generation)) return false;
-      if (books.bookGroup === 99 && !isPrivacyGenerationValid(generation)) return false;
+      if (books.bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return false;
       return await DbUtil.update(predicates, books, column) === 1;
     } catch (err) {
       console.log('TagInfo, Error, ', JSON.stringify(err));
@@ -311,7 +323,7 @@ class BooksDao {
       predicates.in('id', validIds);
       const books = await DbUtil.queryForList<Books>(predicates, column);
       if (books.length !== new Set(validIds).size) return false;
-      const privateOperation = groupId === 99 || await this.isPrivateBookIds(validIds);
+      const privateOperation = groupId === PRIVACY_BOOK_GROUP || await this.isPrivateBookIds(validIds);
       if (privateOperation && !isPrivacyGenerationValid(generation)) return false;
       for (const book of books) {
         if (privateOperation && !isPrivacyGenerationValid(generation)) return false;
@@ -369,7 +381,7 @@ class BooksDao {
   //根据分组获取书籍id
   async queryBooksByGroupId(groupId: number[]){
     const generation = capturePrivacyGeneration();
-    if (groupId.includes(99) && !isPrivacyGenerationValid(generation)) return [];
+    if (groupId.includes(PRIVACY_BOOK_GROUP) && !isPrivacyGenerationValid(generation)) return [];
     let GroupBookId: number[] = [];
     try {
       // 确保 ids 数组的每个元素都是数字
@@ -386,7 +398,7 @@ class BooksDao {
           GroupBookId.push(bookId)
         }
       });
-      if (groupId.includes(99) && !isPrivacyGenerationValid(generation)) return [];
+      if (groupId.includes(PRIVACY_BOOK_GROUP) && !isPrivacyGenerationValid(generation)) return [];
       return GroupBookId
     } catch (e) {
       console.log('queryBooksByGroupId, Error, ', JSON.stringify(e));
@@ -413,13 +425,13 @@ class BooksDao {
   //根据分组id统计书籍数量
   async countBookByGroup(groupId: number) {
     const generation = capturePrivacyGeneration();
-    if (groupId === 99 && !isPrivacyGenerationValid(generation)) return 0;
+    if (groupId === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return 0;
     try {
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
       predicates.equalTo('bookGroup', groupId)
       const count = await DbUtil.queryForCount(predicates, column)
-      if (groupId === 99 && !isPrivacyGenerationValid(generation)) return 0;
+      if (groupId === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return 0;
       return count
     } catch (err) {
       console.log('TagInfo, Error, ', JSON.stringify(err))
@@ -431,7 +443,7 @@ class BooksDao {
   async queryBookByGroup(groupId: number[], updateGroupId: number): Promise<boolean> {
     const generation = capturePrivacyGeneration();
     try {
-      if ((groupId.includes(99) || updateGroupId === 99) && !isPrivacyGenerationValid(generation)) return false;
+      if ((groupId.includes(PRIVACY_BOOK_GROUP) || updateGroupId === PRIVACY_BOOK_GROUP) && !isPrivacyGenerationValid(generation)) return false;
       const column = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
       predicates.in('bookGroup', groupId);
@@ -514,7 +526,7 @@ class BooksDao {
       // 创建查询条件，查找所有给定的 id
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
       predicates.in('id', validIds);
-      predicates.notEqualTo('bookGroup', 99);  // 使用 in 条件一次性查找多个 id
+      predicates.notEqualTo('bookGroup', PRIVACY_BOOK_GROUP);  // 使用 in 条件一次性查找多个 id
 
       // 执行一次查询获取所有匹配的书籍
       const books = await DbUtil.queryForList<Books>(predicates, column);

@@ -127,7 +127,13 @@ class FakeCredentialCrypto implements PrivacyCredentialCrypto {
 }
 
 class TestClock {
-  nowMs: number = 1000000;
+  wallMs: number = 1000000;
+  uptimeMs: number = 50000;
+
+  advance(elapsedMs: number): void {
+    this.wallMs += elapsedMs;
+    this.uptimeMs += elapsedMs;
+  }
 }
 
 class TestGate {
@@ -150,15 +156,25 @@ class CredentialFixture {
   store: MemoryCredentialStore = new MemoryCredentialStore(this.events);
   crypto: FakeCredentialCrypto = new FakeCredentialCrypto(this.events);
   clock: TestClock = new TestClock();
-  service: PrivacyCredentialService = new PrivacyCredentialService(this.store, this.crypto, () => this.clock.nowMs);
+  service: PrivacyCredentialService = new PrivacyCredentialService(this.store, this.crypto,
+    () => this.clock.wallMs, () => this.clock.uptimeMs);
   current: boolean = true;
   isCurrent: () => boolean = () => this.current;
 
-  seed(): void {
+  seed(failures: number = 0): void {
     const salt = new Uint8Array(16).fill(1);
-    const record = PrivacyPinPolicy.createRecord(salt, fakeVerifier('012345', salt), this.clock.nowMs);
+    const record = PrivacyPinPolicy.createRecord(salt, fakeVerifier('012345', salt), this.clock.wallMs);
+    record.failedAttempts = failures;
+    const delayMs = PrivacyPinPolicy.delayForFailures(failures);
+    record.retryUntilMs = delayMs === 0 ? 0 : record.clockFloorMs + delayMs;
     this.store.cached = PrivacyPinPolicy.encodeRecord(record);
     this.store.durable = this.store.cached;
+  }
+
+  restart(): void {
+    this.store.cached = this.store.durable;
+    this.service = new PrivacyCredentialService(this.store, this.crypto,
+      () => this.clock.wallMs, () => this.clock.uptimeMs);
   }
 }
 
@@ -286,23 +302,93 @@ export default function privacyCredentialServiceTest() {
       expect(fixture.store.diskRecord().failedAttempts).assertEqual(0);
     });
 
-    it('persistsCooldownAcrossServiceRestartAndRejectsRollbackBypass', 0, async () => {
+    it('wallClockJumpsCannotShortenOrExtendActiveCooldown', 0, async () => {
       const fixture = new CredentialFixture();
       fixture.seed();
       for (let attempt = 0; attempt < 5; attempt++) {
         expect(await fixture.service.verify('999999', fixture.isCurrent)).assertFalse();
       }
       expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(30000);
-      fixture.store.cached = fixture.store.durable;
-      fixture.service = new PrivacyCredentialService(fixture.store, fixture.crypto, () => fixture.clock.nowMs);
-      fixture.clock.nowMs -= 100000;
+      fixture.clock.wallMs += 86400000;
       expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(30000);
       await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
       expect(fixture.crypto.deriveCalls).assertEqual(5);
-      fixture.clock.nowMs = 1030000;
+      fixture.clock.wallMs = 1;
+      fixture.clock.uptimeMs += 10000;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(20000);
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(20000);
+      fixture.clock.uptimeMs += 19999;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(1);
+      fixture.clock.uptimeMs++;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
       expect(await fixture.service.verify('999999', fixture.isCurrent)).assertFalse();
       expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(60000);
+      expect(fixture.store.diskRecord().clockFloorMs).assertEqual(1030000);
       expect(fixture.store.diskRecord().failedAttempts).assertEqual(6);
+    });
+
+    it('restartPendingCooldownWaitsFullDelayOnceRegardlessOfWallTime', 0, async () => {
+      const changedWalls: number[] = [1, 86400000];
+      for (let index = 0; index < changedWalls.length; index++) {
+        const fixture = new CredentialFixture();
+        fixture.seed();
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await fixture.service.verify('999999', fixture.isCurrent);
+        }
+        // Even an expired persisted cooldown must get one conservative wait after a restart.
+        fixture.clock.advance(60000);
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
+        fixture.clock.wallMs = changedWalls[index];
+        fixture.clock.uptimeMs = 0;
+        fixture.restart();
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(30000);
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(30000);
+        await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
+        fixture.clock.advance(12000);
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(18000);
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(18000);
+        fixture.clock.advance(18000);
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
+        expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
+        expect(fixture.store.putCalls).assertEqual(5);
+        expect(fixture.crypto.deriveCalls).assertEqual(5);
+        expect(await fixture.service.verify('012345', fixture.isCurrent)).assertTrue();
+        expect(fixture.store.diskRecord().retryUntilMs).assertEqual(0);
+      }
+    });
+
+    it('directVerifyAfterRestartCannotSkipPendingCooldown', 0, async () => {
+      const fixture = new CredentialFixture();
+      fixture.seed(5);
+      fixture.clock.wallMs += 86400000;
+      fixture.restart();
+      await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(30000);
+      expect(fixture.store.putCalls).assertEqual(0);
+      expect(fixture.crypto.deriveCalls).assertEqual(0);
+      fixture.clock.uptimeMs += 30000;
+      expect(await fixture.service.verify('012345', fixture.isCurrent)).assertTrue();
+    });
+
+    it('maxCooldownExpiresByUptimeWithoutRearmingOrPermanentLockout', 0, async () => {
+      const fixture = new CredentialFixture();
+      fixture.seed(PrivacyPinPolicy.MAX_FAILURES);
+      fixture.clock.wallMs = 1;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(PrivacyPinPolicy.MAX_RETRY_MS);
+      fixture.clock.uptimeMs += PrivacyPinPolicy.MAX_RETRY_MS - 1;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(1);
+      fixture.clock.wallMs += 86400000;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(1);
+      fixture.clock.uptimeMs++;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
+      expect(await fixture.service.verify('999999', fixture.isCurrent)).assertFalse();
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(PrivacyPinPolicy.MAX_RETRY_MS);
+      expect(fixture.store.diskRecord().failedAttempts).assertEqual(PrivacyPinPolicy.MAX_FAILURES);
+      fixture.clock.uptimeMs += PrivacyPinPolicy.MAX_RETRY_MS;
+      expect(await fixture.service.verify('012345', fixture.isCurrent)).assertTrue();
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
+      fixture.restart();
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
     });
 
     it('preAttemptFlushFailurePreventsKdfAndPoisonsOptimisticCache', 0, async () => {
@@ -321,6 +407,25 @@ export default function privacyCredentialServiceTest() {
       await expectFailure(() => fixture.service.setBiometricEnabled(true, fixture.isCurrent));
       expect(fixture.store.putCalls).assertEqual(1);
       expect(fixture.store.readCalls).assertEqual(1);
+    });
+
+    it('failedCooldownReservationStaysFailClosedAfterElapsedTimeAndWallJump', 0, async () => {
+      const fixture = new CredentialFixture();
+      fixture.seed(4);
+      fixture.store.failFlushAt = 1;
+      fixture.store.onFlush = async () => {
+        fixture.clock.wallMs += 86400000;
+        fixture.clock.uptimeMs += 10000;
+      };
+      await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
+      expect(fixture.store.record().failedAttempts).assertEqual(5);
+      expect(fixture.store.diskRecord().failedAttempts).assertEqual(4);
+      expect(fixture.crypto.deriveCalls).assertEqual(0);
+      fixture.clock.uptimeMs += PrivacyPinPolicy.MAX_RETRY_MS;
+      fixture.store.cached = fixture.store.durable;
+      await expectFailure(() => fixture.service.getStatus());
+      await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
+      expect(fixture.store.putCalls).assertEqual(1);
     });
 
     it('resetFlushFailureCannotAuthenticateOrTrustClearedCache', 0, async () => {
@@ -397,6 +502,53 @@ export default function privacyCredentialServiceTest() {
       await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
       expect(fixture.store.diskRecord().failedAttempts).assertEqual(1);
       expect(fixture.store.putCalls).assertEqual(1);
+    });
+
+    it('staleFifthKdfKeepsCooldownAdvancingWithoutClearingOrRearming', 0, async () => {
+      const fixture = new CredentialFixture();
+      fixture.seed(4);
+      const enteredKdf = new TestGate();
+      const allowKdf = new TestGate();
+      fixture.crypto.onDerive = async () => {
+        enteredKdf.open();
+        await allowKdf.wait;
+      };
+      const verification = expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
+      await enteredKdf.wait;
+      const status = fixture.service.getStatus();
+      fixture.current = false;
+      fixture.clock.wallMs += 86400000;
+      fixture.clock.uptimeMs += 10000;
+      allowKdf.open();
+      await verification;
+      expect((await status).retryAfterMs).assertEqual(20000);
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(20000);
+      expect(fixture.store.diskRecord().failedAttempts).assertEqual(5);
+      expect(fixture.store.putCalls).assertEqual(1);
+      fixture.clock.uptimeMs += 20000;
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(0);
+      fixture.current = true;
+      fixture.crypto.onDerive = undefined;
+      expect(await fixture.service.verify('012345', fixture.isCurrent)).assertTrue();
+    });
+
+    it('staleFifthReservationFlushesAndRetainsElapsedCooldownWithoutKdf', 0, async () => {
+      const fixture = new CredentialFixture();
+      fixture.seed(4);
+      fixture.store.onFlush = async () => {
+        fixture.clock.wallMs = 1;
+        fixture.clock.uptimeMs += 5000;
+        fixture.current = false;
+      };
+      await expectFailure(() => fixture.service.verify('012345', fixture.isCurrent));
+      expect(fixture.store.diskRecord().failedAttempts).assertEqual(5);
+      expect(fixture.store.flushCalls).assertEqual(1);
+      expect(fixture.crypto.deriveCalls).assertEqual(0);
+      expect((await fixture.service.getStatus()).retryAfterMs).assertEqual(25000);
+      fixture.store.onFlush = undefined;
+      fixture.current = true;
+      fixture.clock.uptimeMs += 25000;
+      expect(await fixture.service.verify('012345', fixture.isCurrent)).assertTrue();
     });
 
     it('staleSetupAndReplacementKdfNeverWriteNewVerifier', 0, async () => {

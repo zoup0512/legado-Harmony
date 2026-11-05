@@ -4,6 +4,7 @@ import { util } from '@kit.ArkTS';
 import BooksDao from '../database/dao/BooksDao';
 import privacyCredentialService, { PrivacyCredentialStatus } from './PrivacyCredentialService';
 import { bindPrivacySession } from './PrivacyAccessGuard';
+import { PrivacyMonotonicClock, privacyUptimeMs } from './PrivacyMonotonicClock';
 
 export enum PrivacySessionState {
   LOCKED = 'locked',
@@ -95,13 +96,15 @@ export class PrivacySessionService {
   private credentials: PrivacyCredentialAccess;
   private hasPrivacyBooks: () => Promise<boolean>;
   private openPage: PrivacyAuthPageOpener;
+  private readonly clock: PrivacyMonotonicClock;
 
   constructor(credentials: PrivacyCredentialAccess = privacyCredentialService,
     hasPrivacyBooks: () => Promise<boolean> = (): Promise<boolean> => BooksDao.hasPrivacyBooks(),
-    openPage: PrivacyAuthPageOpener = openPrivacyAuthPage) {
+    openPage: PrivacyAuthPageOpener = openPrivacyAuthPage, uptime: () => number = privacyUptimeMs) {
     this.credentials = credentials;
     this.hasPrivacyBooks = hasPrivacyBooks;
     this.openPage = openPage;
+    this.clock = new PrivacyMonotonicClock(uptime);
   }
 
   isUnlocked(): boolean { return this.state === PrivacySessionState.UNLOCKED; }
@@ -192,13 +195,13 @@ export class PrivacySessionService {
       return false;
     }
     try {
-      const startedAt = Date.now();
+      const startedAt = this.clock.now();
       let resultCode = await this.runAuthOnce(authTypes);
       if (!isCurrent()) return false;
       // Preserve the immediate combined-widget fallback, but never reopen after cancellation.
       if (resultCode !== userAuth.UserAuthResultCode.SUCCESS &&
         resultCode !== userAuth.UserAuthResultCode.CANCELED && authTypes.length > 1 &&
-        Date.now() - startedAt < 2500 && fingerprintReady) {
+        this.clock.now() - startedAt < 2500 && fingerprintReady) {
         this.cancelAuthInstance();
         resultCode = await this.runAuthOnce([userAuth.UserAuthType.FINGERPRINT]);
       }
@@ -253,7 +256,7 @@ export class PrivacySessionService {
       const status = await this.credentials.getStatus();
       if (!this.isCurrent(request)) return;
       request.status = status;
-      request.retryUntil = Date.now() + status.retryAfterMs;
+      request.retryUntil = this.clock.now() + status.retryAfterMs;
       if (!status.configured) {
         if (request.mode !== PrivacyAuthMode.UNLOCK) {
           this.lastFailureMessage = '请先设置六位隐私密码';
@@ -306,7 +309,7 @@ export class PrivacySessionService {
     info.mode = request.mode;
     info.stage = this.getStage(request);
     info.biometricEnabled = request.status.biometricEnabled;
-    info.retryAfterMs = Math.max(0, request.retryUntil - Date.now());
+    info.retryAfterMs = Math.max(0, request.retryUntil - this.clock.now());
     info.approved = request.approved;
     return info;
   }
@@ -341,7 +344,7 @@ export class PrivacySessionService {
           const status = await this.credentials.getStatus();
           if (!isCurrent()) return false;
           request.status = status;
-          request.retryUntil = Date.now() + status.retryAfterMs;
+          request.retryUntil = this.clock.now() + status.retryAfterMs;
           return false;
         }
         request.pinVerified = true;
@@ -364,7 +367,7 @@ export class PrivacySessionService {
           const status = await this.credentials.getStatus();
           if (isCurrent()) {
             request.status = status;
-            request.retryUntil = Date.now() + status.retryAfterMs;
+            request.retryUntil = this.clock.now() + status.retryAfterMs;
           }
         } catch (_) {
           // A broken store must also invalidate cached biometric/recovery authorization.
@@ -421,7 +424,7 @@ export class PrivacySessionService {
         return false;
       }
       request.status = status;
-      request.retryUntil = Date.now() + status.retryAfterMs;
+      request.retryUntil = this.clock.now() + status.retryAfterMs;
       // Even an unlocked session must obtain a fresh system result for recovery/enabling.
       if (!await this.runSystemAuthentication(request) || !isCurrent()) return false;
       if (legacy) request.legacyVerified = true;

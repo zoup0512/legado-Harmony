@@ -15,6 +15,7 @@ import { BookGroups } from '../../../../../database/entities/BookGroups'
 import BooksDao from '../../../../../database/dao/BooksDao'
 import toolsUtils from '../../../../../common/utils/ToolsUtils'
 import privacySessionService from '../../../../../privacy/PrivacySessionService'
+import { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyConstants'
 
 @Component
 @CustomDialog
@@ -192,11 +193,11 @@ export default struct BookSelectGroupDialog{
       let ids = toolsUtils.numberArrays(this.Ids)
       if (this.isMoveStatus === 1) {
         // 99 is not a normal manageable group, even from a stale group picker.
-        if (ids.includes(99)) return false
+        if (ids.includes(PRIVACY_BOOK_GROUP)) return false
         ids = await BooksDao.queryBooksByGroupId(ids)
       }
       if (this.isMoveStatus !== 0 && this.isMoveStatus !== 1) return false
-      const privateOperation = this.oldGroupId === 99 || this.moveGroupId === 99 ||
+      const privateOperation = this.oldGroupId === PRIVACY_BOOK_GROUP || this.moveGroupId === PRIVACY_BOOK_GROUP ||
         await BooksDao.isPrivateBookIds(ids)
       if (privateOperation && !await privacySessionService.unlock(this.getUIContext())) return false
       const generation = privacySessionService.getGeneration()

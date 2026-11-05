@@ -21,6 +21,7 @@ import worksListsUtils from '../../../../common/utils/WorksListsUtils';
 import { ThemeItem } from '../../../../common/model/Theme';
 import { ThemeStorageKey } from '../../../../common/constants/Theme';
 import privacyFolderService from '../../../../privacy/PrivacyFolderService';
+import { PRIVACY_BOOK_GROUP } from '../../../../privacy/PrivacyConstants';
 import privacySessionService from '../../../../privacy/PrivacySessionService';
 import { LocalBookAccessLogic } from '../../../../common/utils/LocalBookAccess';
 
@@ -509,7 +510,7 @@ struct BookManagePage {
   // Revalidate selection when confirmation is accepted, not when the dialog opened.
   async manageDelete(): Promise<void> {
     const ids = this.checkListNumber.slice();
-    if (this.bookTypeNumber === 1 && ids.includes(99)) return;
+    if (this.bookTypeNumber === 1 && ids.includes(PRIVACY_BOOK_GROUP)) return;
     if (this.bookTypeNumber === 1 || this.bookTypeNumber === 5) {
       for (const id of ids) {
         if (this.bookTypeNumber === 1) await bookGroupUtil.delGroupById(id);

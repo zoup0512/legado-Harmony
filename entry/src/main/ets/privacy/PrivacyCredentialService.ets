@@ -2,6 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { PrivacyCredentialRecord, PrivacyPinPolicy } from './PrivacyPinPolicy';
+import { PrivacyCooldownClock, privacyUptimeMs } from './PrivacyMonotonicClock';
 
 export class PrivacyCredentialStatus {
   configured: boolean = false;
@@ -95,7 +96,7 @@ class NativePrivacyCredentialCrypto implements PrivacyCredentialCrypto {
 export class PrivacyCredentialService {
   private readonly store: PrivacyCredentialStore;
   private readonly crypto: PrivacyCredentialCrypto;
-  private readonly now: () => number;
+  private readonly clock: PrivacyCooldownClock;
   private tail: Promise<void> = Promise.resolve();
   private failedClosed: boolean = false;
   private observedConfigured: boolean = false;
@@ -104,10 +105,11 @@ export class PrivacyCredentialService {
   private readonly expiredMessage: string = '认证请求已过期，请重试';
 
   constructor(store: PrivacyCredentialStore = new PreferencesCredentialStore(),
-    crypto: PrivacyCredentialCrypto = new NativePrivacyCredentialCrypto(), now: () => number = () => Date.now()) {
+    crypto: PrivacyCredentialCrypto = new NativePrivacyCredentialCrypto(), now: () => number = () => Date.now(),
+    uptime: () => number = privacyUptimeMs) {
     this.store = store;
     this.crypto = crypto;
-    this.now = now;
+    this.clock = new PrivacyCooldownClock(now, uptime);
   }
 
   init(context: common.Context): void {
@@ -164,16 +166,19 @@ export class PrivacyCredentialService {
         this.failedClosed = true;
         throw new Error(this.storageMessage);
       }
+      this.clock.seed(0, false);
       return undefined;
     }
+    let record: PrivacyCredentialRecord;
     try {
-      const record = PrivacyPinPolicy.decodeRecord(raw);
-      this.observedConfigured = true;
-      return record;
+      record = PrivacyPinPolicy.decodeRecord(raw);
     } catch (_) {
       this.failedClosed = true;
       throw new Error(PrivacyPinPolicy.CORRUPT_MESSAGE);
     }
+    this.observedConfigured = true;
+    this.clock.seed(record.clockFloorMs, record.retryUntilMs > 0);
+    return record;
   }
 
   private requireConfigured(record: PrivacyCredentialRecord | undefined): PrivacyCredentialRecord {
@@ -237,7 +242,7 @@ export class PrivacyCredentialService {
       if (record !== undefined) {
         status.configured = true;
         status.biometricEnabled = record.biometricEnabled;
-        status.retryAfterMs = PrivacyPinPolicy.retryAfterMs(record, this.now());
+        status.retryAfterMs = PrivacyPinPolicy.retryAfterMs(record, this.clock.now());
       }
       return status;
     });
@@ -262,7 +267,7 @@ export class PrivacyCredentialService {
       PrivacyPinPolicy.requirePin(pin);
       const record = this.requireConfigured(await this.readRecord());
       this.requireCurrent(isCurrent);
-      const reserved = PrivacyPinPolicy.reserveAttempt(record, this.now());
+      const reserved = PrivacyPinPolicy.reserveAttempt(record, this.clock.now());
       // Charge before KDF: interruption, KDF failure, and stale requests cannot get a free guess.
       await this.persist(reserved, isCurrent);
       let salt = new Uint8Array(0);
@@ -277,7 +282,7 @@ export class PrivacyCredentialService {
         if (!PrivacyPinPolicy.constantTimeEqual(candidate, expected)) {
           return false;
         }
-        const cleared = PrivacyPinPolicy.clearAttempts(reserved, this.now());
+        const cleared = PrivacyPinPolicy.clearAttempts(reserved, this.clock.now());
         await this.persist(cleared, isCurrent);
         this.requireCurrent(isCurrent);
         return true;
@@ -310,7 +315,7 @@ export class PrivacyCredentialService {
       this.requireCurrent(isCurrent);
       verifier = await this.derive(pin, salt);
       this.requireCurrent(isCurrent);
-      const nowMs = previous === undefined ? this.now() : Math.max(previous.clockFloorMs, this.now());
+      const nowMs = previous === undefined ? this.clock.now() : Math.max(previous.clockFloorMs, this.clock.now());
       const record = PrivacyPinPolicy.createRecord(salt, verifier, nowMs);
       if (previous !== undefined) {
         record.biometricEnabled = previous.biometricEnabled;

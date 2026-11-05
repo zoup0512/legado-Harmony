@@ -4,8 +4,9 @@ import { LocalBookAccessLogic } from '../common/utils/LocalBookAccess';
 import { Books } from '../database/entities/Books';
 import privacySessionService from './PrivacySessionService';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from './PrivacyAccessGuard';
+import { PRIVACY_BOOK_GROUP } from './PrivacyConstants';
 
-export const PRIVACY_BOOK_GROUP: number = 99;
+export { PRIVACY_BOOK_GROUP } from './PrivacyConstants';
 
 class PrivacyFolderService {
   async list(searchKey: string = ''): Promise<Books[]> {

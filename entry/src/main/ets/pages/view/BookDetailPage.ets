@@ -15,6 +15,7 @@ import {
 } from '../../common/utils/LocalBookAccess'
 import BooksDao from '../../database/dao/BooksDao'
 import privacySessionService from '../../privacy/PrivacySessionService'
+import { PageAccessRefresh } from '../../privacy/PageAccessRefresh'
 
 /**
  * 标题图片样式
@@ -61,11 +62,9 @@ struct BookDetailPage {
   @State privacyError: string = ''
   private privacyRequired: boolean = true
   private privacyGeneration: number = -1
-  private accessRequestId: number = 0
+  private accessRefresh: PageAccessRefresh = new PageAccessRefresh()
   private pageActive: boolean = false
   private pageReady: boolean = false
-  private accessRefreshing: boolean = false
-  private refreshRequested: boolean = false
   private catalogReady: boolean = false
   private unsubscribePrivacy: (() => void) | undefined
   // 加入书架dialog
@@ -90,7 +89,7 @@ struct BookDetailPage {
 
   onPageHide() {
     this.pageActive = false
-    this.accessRequestId++
+    this.accessRefresh.invalidate()
     this.isShow = false
     if (this.privacyRequired) {
       this.coverPrivateDetail()
@@ -100,7 +99,7 @@ struct BookDetailPage {
   aboutToDisappear() {
     this.pageActive = false
     this.pageReady = false
-    this.accessRequestId++
+    this.accessRefresh.invalidate()
     this.unsubscribePrivacy?.()
     this.unsubscribePrivacy = undefined
   }
@@ -125,13 +124,17 @@ struct BookDetailPage {
     await this.refreshDetailAccess()
   }
 
+  private get accessRequestId(): number {
+    return this.accessRefresh.getRequestId()
+  }
+
   private canShowDetail(): boolean {
     return this.pageActive && !this.privacyCovered && (!this.privacyRequired ||
       (privacySessionService.isUnlocked() && this.privacyGeneration === privacySessionService.getGeneration()))
   }
 
   private coverPrivateDetail() {
-    this.accessRequestId++
+    this.accessRefresh.invalidate()
     this.privacyCovered = true
     this.privacyChecking = false
     this.privacyGeneration = -1
@@ -142,18 +145,15 @@ struct BookDetailPage {
     this.dialogController.close()
   }
 
-  private async refreshDetailAccess() {
-    if (!this.pageReady || !this.pageActive) {
-      return
-    }
-    if (this.accessRefreshing) {
-      this.refreshRequested = true
-      return
-    }
-    this.accessRefreshing = true
-    this.refreshRequested = false
-    const requestId = ++this.accessRequestId
+  private async refreshDetailAccess(): Promise<void> {
+    if (!this.pageReady || !this.pageActive) return
     const generation = privacySessionService.getGeneration()
+    await this.accessRefresh.refresh(generation, privacySessionService.isUnlocked(),
+      (requestId: number): Promise<boolean> => this.refreshDetailAccessRequest(requestId, generation))
+  }
+
+  private async refreshDetailAccessRequest(requestId: number, generation: number): Promise<boolean> {
+    if (!this.pageReady || !this.pageActive || generation !== privacySessionService.getGeneration()) return false
     this.privacyCovered = true
     this.privacyChecking = true
     this.privacyError = ''
@@ -161,20 +161,20 @@ struct BookDetailPage {
       const required = await BooksDao.isPrivateBook(this.bookData)
       if (!this.pageActive || requestId !== this.accessRequestId ||
         generation !== privacySessionService.getGeneration()) {
-        return
+        return false
       }
       this.privacyRequired = required
       this.privacyGeneration = generation
       if (required && !privacySessionService.isUnlocked()) {
         this.coverPrivateDetail()
-        return
+        return false
       }
       this.privacyCovered = false
       if (!this.catalogReady) {
         await this.initUrlBook(requestId)
       }
       if (!this.canShowDetail() || requestId !== this.accessRequestId) {
-        return
+        return false
       }
       this.isShow = true
       if (!this.bookData.isJoin) {
@@ -183,6 +183,7 @@ struct BookDetailPage {
           this.bookData.isJoin = isJoin
         }
       }
+      return this.canShowDetail() && requestId === this.accessRequestId && this.catalogReady
     } catch (_) {
       if (requestId === this.accessRequestId) {
         this.privacyRequired = true
@@ -190,17 +191,13 @@ struct BookDetailPage {
         this.privacyError = '无法确认书籍访问权限，请返回后重试'
         this.isShow = false
       }
+      return false
     } finally {
       if (requestId === this.accessRequestId) {
         this.privacyChecking = false
-      }
-      this.accessRefreshing = false
-      if (this.refreshRequested && this.pageActive) {
-        this.refreshRequested = false
-        this.refreshDetailAccess()
-      } else if (this.pageActive && this.privacyCovered) {
-        this.privacyChecking = false
-        if (!this.privacyError) this.privacyError = '请解锁后查看书籍详情'
+        if (this.pageActive && this.privacyCovered && !this.privacyError) {
+          this.privacyError = '请解锁后查看书籍详情'
+        }
       }
     }
   }

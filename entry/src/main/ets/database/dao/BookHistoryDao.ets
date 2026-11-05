@@ -10,32 +10,21 @@ import { BookHistory } from '../entities/BookHistory';
 import { BookHistoryTypeParams } from '../types/BookHistoryType';
 import { ColumnInfo } from '../types/ColumnInfo';
 import BooksDao from './BooksDao';
-import { Books } from '../entities/Books';
 import { getPrivacyGeneration } from '../../privacy/PrivacyAccessGuard';
+import { filterPublicHistories } from '../../privacy/PrivacyOwnershipLookup';
 
 class BookHistoryDao {
   TABLE_NAME: string = 'book_history'
 
-  // History IDs are not always shelf IDs; check both identifiers and the actual file path.
+  // Standalone checks stay live; history IDs may differ from shelf IDs.
   async isPrivateHistory(history: BookHistory): Promise<boolean> {
-    const identity = new Books();
-    identity.id = history.id;
-    identity.bookUrl = history.bookUrl;
-    if (await BooksDao.isPrivateBook(identity)) return true;
-    if (history.originBookId !== undefined && history.originBookId !== history.id) {
-      identity.id = history.originBookId;
-      return await BooksDao.isPrivateBook(identity);
-    }
-    return false;
+    return (await BooksDao.loadPrivacyOwnership()).isPrivateHistory({
+      id: history.id, originBookId: history.originBookId, bookUrl: history.bookUrl
+    });
   }
 
   private async publicHistories(histories: BookHistory[], generation: number): Promise<BookHistory[]> {
-    const result: BookHistory[] = [];
-    for (const history of histories) {
-      if (!await this.isPrivateHistory(history)) result.push(history);
-      if (getPrivacyGeneration() !== generation) return [];
-    }
-    return getPrivacyGeneration() === generation ? result : [];
+    return await filterPublicHistories(histories, generation, () => BooksDao.loadPrivacyOwnership(), getPrivacyGeneration);
   }
 
   // 创建book_history数据表
@@ -58,6 +47,7 @@ class BookHistoryDao {
     const type = params?.type
     const sort = params?.sort
     try {
+      if (!DbUtil.rdbStore) return [];
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       let sql = `SELECT * FROM ${this.TABLE_NAME}`;
       // 动态添加 WHERE 子句
@@ -86,6 +76,7 @@ class BookHistoryDao {
   async searchLimit(): Promise<BookHistory[]> {
     const generation = getPrivacyGeneration();
     try {
+      if (!DbUtil.rdbStore) return [];
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       let sql = `SELECT * FROM ${this.TABLE_NAME}`;
       // 动态添加 WHERE 子句

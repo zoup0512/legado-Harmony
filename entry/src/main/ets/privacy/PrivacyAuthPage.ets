@@ -5,6 +5,7 @@ import { ThemeItem } from '../common/model/Theme';
 import privacySessionService, {
   PrivacyAuthMode, PrivacyAuthRequestInfo, PrivacyAuthStage, PrivacyBiometricPurpose
 } from './PrivacySessionService';
+import { PrivacyMonotonicClock } from './PrivacyMonotonicClock';
 
 @Entry
 @Component
@@ -27,6 +28,7 @@ export default struct PrivacyAuthPage {
   private leaving: boolean = false;
   private completeOnExit: boolean = false;
   private finalized: boolean = false;
+  private readonly clock: PrivacyMonotonicClock = new PrivacyMonotonicClock();
   private retryUntil: number = 0;
   private retryTimer: number = -1;
   private unsubscribeCancel: (() => void) | undefined;
@@ -94,7 +96,7 @@ export default struct PrivacyAuthPage {
     this.info = info;
     this.ready = true;
     this.stopRetryTimer();
-    this.retryUntil = Date.now() + info.retryAfterMs;
+    this.retryUntil = this.clock.now() + info.retryAfterMs;
     this.updateRetryCountdown();
     if (this.retrySeconds > 0) {
       this.retryTimer = setInterval((): void => this.updateRetryCountdown(), 1000);
@@ -103,7 +105,7 @@ export default struct PrivacyAuthPage {
   }
 
   private updateRetryCountdown(): void {
-    this.retrySeconds = Math.max(0, Math.ceil((this.retryUntil - Date.now()) / 1000));
+    this.retrySeconds = Math.max(0, Math.ceil((this.retryUntil - this.clock.now()) / 1000));
     if (this.retrySeconds === 0) this.stopRetryTimer();
   }
 

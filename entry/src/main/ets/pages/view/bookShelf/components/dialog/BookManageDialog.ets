@@ -23,6 +23,7 @@ import worksListsUtils from '../../../../../common/utils/WorksListsUtils';
 import { ThemeItem } from '../../../../../common/model/Theme';
 import { ThemeStorageKey } from '../../../../../common/constants/Theme';
 import privacySessionService from '../../../../../privacy/PrivacySessionService';
+import { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyConstants';
 
 
 /**
@@ -528,7 +529,7 @@ export default  struct BookManageDialog {
   // Old management overlays must authorize again when deletion is confirmed.
   async manageDelete(): Promise<void> {
     const ids = this.checkListNumber.slice();
-    if (this.bookTypeNumber === 1 && ids.includes(99)) return;
+    if (this.bookTypeNumber === 1 && ids.includes(PRIVACY_BOOK_GROUP)) return;
     if (this.bookTypeNumber === 1 || this.bookTypeNumber === 5) {
       for (const id of ids) {
         if (this.bookTypeNumber === 1) await bookGroupUtil.delGroupById(id);

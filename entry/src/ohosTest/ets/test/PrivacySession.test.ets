@@ -30,6 +30,12 @@ class SessionTestCredentials implements PrivacyCredentialAccess {
   verifyGate: SessionTestGate | undefined;
   statusGate: SessionTestGate | undefined;
   currentCheck: (() => boolean) | undefined;
+  retryUntil: number = 0;
+  private readonly uptime: () => number;
+
+  constructor(uptime: () => number) {
+    this.uptime = uptime;
+  }
 
   async getStatus(): Promise<PrivacyCredentialStatus> {
     if (this.statusGate !== undefined) await this.statusGate.wait;
@@ -37,7 +43,7 @@ class SessionTestCredentials implements PrivacyCredentialAccess {
     const result = new PrivacyCredentialStatus();
     result.configured = this.status.configured;
     result.biometricEnabled = this.status.biometricEnabled;
-    result.retryAfterMs = this.status.retryAfterMs;
+    result.retryAfterMs = Math.max(0, this.retryUntil - this.uptime());
     return result;
   }
 
@@ -57,9 +63,10 @@ class SessionTestCredentials implements PrivacyCredentialAccess {
     this.requireCurrent(isCurrent);
     this.lastPin = pin;
     if (pin !== '012345') {
-      this.status.retryAfterMs = 30000;
+      this.retryUntil = this.uptime() + 30000;
       return false;
     }
+    this.retryUntil = 0;
     return true;
   }
 
@@ -116,25 +123,29 @@ class SessionWithFakeBiometrics extends PrivacySessionService {
   nativeCalls: number = 0;
   available: boolean = true;
   nativeGate: SessionTestGate | undefined;
+  onNative: (() => void) | undefined;
 
   protected isTypeAvailable(_type: userAuth.UserAuthType): boolean { return this.available; }
 
   protected async runAuthOnce(_types: userAuth.UserAuthType[]): Promise<number> {
     this.nativeCalls++;
+    const callback = this.onNative;
+    if (callback !== undefined) callback();
     if (this.nativeGate !== undefined) await this.nativeGate.wait;
     return this.results.length > 0 ? this.results.shift() as number : userAuth.UserAuthResultCode.SUCCESS;
   }
 }
 
 class SessionFixture {
-  credentials: SessionTestCredentials = new SessionTestCredentials();
+  uptimeMs: number = 50000;
+  credentials: SessionTestCredentials = new SessionTestCredentials(() => this.uptimeMs);
   page: SessionTestPage = new SessionTestPage();
   books: SessionTestBooks = new SessionTestBooks();
   context: UIContext = {} as UIContext;
   service: SessionWithFakeBiometrics = new SessionWithFakeBiometrics(this.credentials,
     (): Promise<boolean> => this.books.hasPrivacyBooks(),
     (context: UIContext | undefined, requestId: number, mode: PrivacyAuthMode): Promise<void> =>
-      this.page.open(context, requestId, mode));
+      this.page.open(context, requestId, mode), () => this.uptimeMs);
 
   constructor(configured: boolean = true, biometricEnabled: boolean = false) {
     this.credentials.status.configured = configured;
@@ -303,10 +314,47 @@ export default function privacySessionTest() {
       const result = f.service.unlock();
       await f.page.opened.wait;
       expect(await f.service.submitPin(f.page.requestId, '999999')).assertFalse();
-      expect(f.info().retryAfterMs > 0 && f.info().retryAfterMs <= 30000).assertTrue();
+      expect(f.info().retryAfterMs).assertEqual(30000);
       expect(f.complete()).assertFalse();
       f.cancel();
       expect(await result).assertFalse();
+    });
+
+    it('retryDisplayAdvancesByUptimeAndRepeatedReadsOrRefreshDoNotRearm', 0, async () => {
+      const f = new SessionFixture(true, true);
+      f.credentials.retryUntil = f.uptimeMs + 30000;
+      const result = f.service.unlock();
+      await f.page.opened.wait;
+      expect(f.info().retryAfterMs).assertEqual(30000);
+      f.uptimeMs += 10000;
+      expect(f.info().retryAfterMs).assertEqual(20000);
+      expect(f.info().retryAfterMs).assertEqual(20000);
+      f.service.results = [userAuth.UserAuthResultCode.CANCELED];
+      expect(await f.service.authenticateBiometric(f.page.requestId, PrivacyBiometricPurpose.UNLOCK)).assertFalse();
+      expect(f.info().retryAfterMs).assertEqual(20000);
+      f.uptimeMs += 19999;
+      expect(f.info().retryAfterMs).assertEqual(1);
+      f.uptimeMs++;
+      expect(f.info().retryAfterMs).assertEqual(0);
+      expect(f.info().retryAfterMs).assertEqual(0);
+      f.cancel();
+      expect(await result).assertFalse();
+    });
+
+    it('wrongPinRefreshUsesElapsedDeadlineRatherThanRepeatedFullDelay', 0, async () => {
+      const f = new SessionFixture();
+      const result = f.service.unlock();
+      await f.page.opened.wait;
+      expect(await f.service.submitPin(f.page.requestId, '999999')).assertFalse();
+      expect(f.info().retryAfterMs).assertEqual(30000);
+      f.uptimeMs += 12000;
+      expect(f.info().retryAfterMs).assertEqual(18000);
+      expect(f.info().retryAfterMs).assertEqual(18000);
+      f.uptimeMs += 18000;
+      expect(f.info().retryAfterMs).assertEqual(0);
+      expect(await f.service.submitPin(f.page.requestId, '012345')).assertTrue();
+      f.complete();
+      expect(await result).assertTrue();
     });
 
     it('disabledBiometricsCannotUnlockOrResetPassword', 0, async () => {
@@ -342,6 +390,25 @@ export default function privacySessionTest() {
       expect(await f.service.submitPin(f.page.requestId, '012345')).assertTrue();
       f.complete();
       expect(await result).assertTrue();
+    });
+
+    it('combinedWidgetFallbackUsesUptimeAtTheImmediateResultBoundary', 0, async () => {
+      const elapsedTimes: number[] = [2499, 2500, 30000];
+      for (let index = 0; index < elapsedTimes.length; index++) {
+        const f = new SessionFixture(true, true);
+        f.service.results = [0, userAuth.UserAuthResultCode.SUCCESS];
+        f.service.onNative = (): void => {
+          if (f.service.nativeCalls === 1) f.uptimeMs += elapsedTimes[index];
+        };
+        const result = f.service.unlock();
+        await f.page.opened.wait;
+        const immediate = elapsedTimes[index] < 2500;
+        expect(await f.service.authenticateBiometric(f.page.requestId, PrivacyBiometricPurpose.UNLOCK))
+          .assertEqual(immediate);
+        expect(f.service.nativeCalls).assertEqual(immediate ? 2 : 1);
+        f.cancel();
+        expect(await result).assertFalse();
+      }
     });
 
     it('cancelledSystemWidgetDoesNotReopenAndStillAllowsPin', 0, async () => {

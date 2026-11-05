@@ -4,6 +4,10 @@ import privacyPinPolicyTest from './PrivacyPinPolicy.test'
 import privacyCredentialServiceTest from './PrivacyCredentialService.test'
 import privacySessionTest from './PrivacySession.test'
 import privacyAccessGuardTest from './PrivacyAccessGuard.test'
+import pageAccessRefreshTest from './PageAccessRefresh.test'
+import privacyWindowStartupTest from './PrivacyWindowStartup.test'
+import privacyMonotonicClockTest from './PrivacyMonotonicClock.test'
+import privacyOwnershipLookupTest from './PrivacyOwnershipLookup.test'
 
 export default function testsuite() {
   abilityTest()
@@ -12,4 +16,8 @@ export default function testsuite() {
   privacyCredentialServiceTest()
   privacySessionTest()
   privacyAccessGuardTest()
+  pageAccessRefreshTest()
+  privacyWindowStartupTest()
+  privacyMonotonicClockTest()
+  privacyOwnershipLookupTest()
 }
