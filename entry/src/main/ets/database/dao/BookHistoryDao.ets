@@ -7,12 +7,36 @@
 import DbUtil from '../../common/utils/DbUtil';
 import AppDatabaseUtil from '../AppDatabaseUtil';
 import { BookHistory } from '../entities/BookHistory';
-import { rssSourcesHistory } from '../entities/rssSourcesHistory';
 import { BookHistoryTypeParams } from '../types/BookHistoryType';
 import { ColumnInfo } from '../types/ColumnInfo';
+import BooksDao from './BooksDao';
+import { Books } from '../entities/Books';
+import { getPrivacyGeneration } from '../../privacy/PrivacyAccessGuard';
 
 class BookHistoryDao {
   TABLE_NAME: string = 'book_history'
+
+  // History IDs are not always shelf IDs; check both identifiers and the actual file path.
+  async isPrivateHistory(history: BookHistory): Promise<boolean> {
+    const identity = new Books();
+    identity.id = history.id;
+    identity.bookUrl = history.bookUrl;
+    if (await BooksDao.isPrivateBook(identity)) return true;
+    if (history.originBookId !== undefined && history.originBookId !== history.id) {
+      identity.id = history.originBookId;
+      return await BooksDao.isPrivateBook(identity);
+    }
+    return false;
+  }
+
+  private async publicHistories(histories: BookHistory[], generation: number): Promise<BookHistory[]> {
+    const result: BookHistory[] = [];
+    for (const history of histories) {
+      if (!await this.isPrivateHistory(history)) result.push(history);
+      if (getPrivacyGeneration() !== generation) return [];
+    }
+    return getPrivacyGeneration() === generation ? result : [];
+  }
 
   // 创建book_history数据表
   async initBookHistoryTable() {
@@ -29,7 +53,8 @@ class BookHistoryDao {
     }
   }
 
-  async search(params?:BookHistoryTypeParams) {
+  async search(params?: BookHistoryTypeParams): Promise<BookHistory[]> {
+    const generation = getPrivacyGeneration();
     const type = params?.type
     const sort = params?.sort
     try {
@@ -52,13 +77,14 @@ class BookHistoryDao {
       }
       const bookHistoryDbList = await DbUtil.querySqlForList<BookHistory>(sql, column);
 
-      return bookHistoryDbList
+      return await this.publicHistories(bookHistoryDbList, generation)
     } catch (err) {
       console.log("TagInfo", JSON.stringify(err))
       return []
     }
   }
-  async searchLimit() {
+  async searchLimit(): Promise<BookHistory[]> {
+    const generation = getPrivacyGeneration();
     try {
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       let sql = `SELECT * FROM ${this.TABLE_NAME}`;
@@ -69,29 +95,25 @@ class BookHistoryDao {
       if (whereClause.length > 0) {
         sql += ` WHERE ${whereClause.join(' AND ')}`;
       }
-      sql += `
-  ORDER BY
-     durChapterTime DESC
-     LIMIT 1
-`;
+      sql += ` ORDER BY durChapterTime DESC`;
       const bookHistoryDbList = await DbUtil.querySqlForList<BookHistory>(sql, column);
-      return bookHistoryDbList
+      // Apply the limit after filtering, so a private last-read row cannot hide public history.
+      return (await this.publicHistories(bookHistoryDbList, generation)).slice(0, 1)
     } catch (err) {
       console.log("TagInfo", JSON.stringify(err))
       return []
     }
   }
 
-  async insert(bookHistory: BookHistory) {
+  async insert(bookHistory: BookHistory, generation: number = getPrivacyGeneration()): Promise<boolean> {
     try {
+      if (await this.isPrivateHistory(bookHistory)) return false;
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
       predicates.equalTo('id', bookHistory.id)
       const count = await DbUtil.queryForCount(predicates, column)
-      if (count > 0) {
-        this.update(bookHistory)
-        return true
-      }
+      if (count > 0) return await this.update(bookHistory, generation);
+      if (await this.isPrivateHistory(bookHistory) || getPrivacyGeneration() !== generation) return false;
       bookHistory.createTime = Date.now()
       await DbUtil.insert(this.TABLE_NAME, bookHistory, column)
       console.log('TagInfo', '创建成功')
@@ -102,16 +124,15 @@ class BookHistoryDao {
     }
   }
 
-  async update(bookHistory: BookHistory) {
+  async update(bookHistory: BookHistory, generation: number = getPrivacyGeneration()): Promise<boolean> {
     try {
+      if (await this.isPrivateHistory(bookHistory)) return false;
       const column: ColumnInfo[] = AppDatabaseUtil.getColumn(this.TABLE_NAME);
       const predicates = DbUtil.getPredicates(this.TABLE_NAME);
       predicates.equalTo('id', bookHistory.id)
       const count = await DbUtil.queryForCount(predicates, column)
-      if (count === 0 && bookHistory instanceof BookHistory) {
-        this.insert(bookHistory)
-        return true
-      }
+      if (count === 0 && bookHistory instanceof BookHistory) return await this.insert(bookHistory, generation);
+      if (await this.isPrivateHistory(bookHistory) || getPrivacyGeneration() !== generation) return false;
       bookHistory.updateTime = Date.now()
       bookHistory.durChapterTime = Date.now()
       await DbUtil.update(predicates, bookHistory, column)

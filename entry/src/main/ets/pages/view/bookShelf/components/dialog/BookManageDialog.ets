@@ -22,6 +22,7 @@ import worksListsDao from '../../../../../database/dao/WorksListsDao';
 import worksListsUtils from '../../../../../common/utils/WorksListsUtils';
 import { ThemeItem } from '../../../../../common/model/Theme';
 import { ThemeStorageKey } from '../../../../../common/constants/Theme';
+import privacySessionService from '../../../../../privacy/PrivacySessionService';
 
 
 /**
@@ -524,23 +525,28 @@ export default  struct BookManageDialog {
     customStyle: false,
     cornerRadius: 25,
   })
-  //删除功能
-  manageDelete(){
-    this.checkListNumber.forEach((item:number)=>{
-      switch (this.bookTypeNumber){
-        case 1:
-          bookGroupUtil.delGroupById(item); break;
-        case 5:
-          worksListsUtils.delWorksByIds(item);break;
-        default:
-          booksUtil.delBooksById(item);break;
+  // Old management overlays must authorize again when deletion is confirmed.
+  async manageDelete(): Promise<void> {
+    const ids = this.checkListNumber.slice();
+    if (this.bookTypeNumber === 1 && ids.includes(99)) return;
+    if (this.bookTypeNumber === 1 || this.bookTypeNumber === 5) {
+      for (const id of ids) {
+        if (this.bookTypeNumber === 1) await bookGroupUtil.delGroupById(id);
+        else await worksListsUtils.delWorksByIds(id);
       }
-    })
-    setTimeout(()=>{
-      this.refreshData()
-      showMessage('已删除')
-    },500)
-    this.delDialog?.close()
+    } else {
+      try {
+        if (await booksDao.isPrivateBookIds(ids) && !await privacySessionService.unlock(this.getUIContext())) return;
+        const generation = privacySessionService.getGeneration();
+        if (!await booksUtil.delBooksById(ids, generation) || generation !== privacySessionService.getGeneration()) return;
+      } catch (_) {
+        return;
+      }
+    }
+    this.refreshData();
+    this.isBookRefreshing++;
+    this.delDialog?.close();
+    showMessage('已删除');
   }
   //是否隐藏分组弹窗
   clickHideDialog: CustomDialogController | null = new CustomDialogController({

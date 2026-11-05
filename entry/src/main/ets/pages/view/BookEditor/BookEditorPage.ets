@@ -3,6 +3,7 @@ import { ThemeStorageKey } from '../../../common/constants/Theme'
 import { ThemeItem } from '../../../common/model/Theme'
 import { BookEditorType } from './BookEditorType/BookEditorType'
 import inputComponent from './InputComponet/inputComponet'
+import { LocalBookAccessLogic } from '../../../common/utils/LocalBookAccess'
 
 //设置书籍封面图片样式
 @Extend(Image) function BookIconSize(){
@@ -18,7 +19,7 @@ struct BookEditorPage {
   BookIcon:Resource = $r('app.media.cover_list')
   BookName:string = '大奉打更人'
   Author:string = '卖报小郎君'
-  BookIconUrl:string = 'https://www.qidian.com/book/1031940621'
+  BookIconUrl:string = ''
   BookSynopsis:string = "《大奉打更人》（第一卷）实体书已在天猫、当当、京东等全平台，以及各个实体书店发售。这个世界，有儒；有道；有佛；有妖；有术士。\n" +
     "警校毕业的许七安幽幽醒来，发现自己身处牢狱之中，三日后流放边陲.....他起初的目的只是自保，顺便在这个没有人权的社会里当个富家翁悠闲度日。\n" +
     "多年后，许七安回首前尘，身后是早已逝去的敌人，以及累累白骨。\n" +
@@ -147,9 +148,8 @@ struct BookEditorPage {
     this.BookIcon,
   ]
   @State selectIcon:boolean = false
-  @State BookSource:number = 24
-  @State FindBook:string = '已搜索到' + this.BookSource + '个书源,'
-  @State FindBookOver:string = '共搜索到' + this.BookSource + '个书源,'
+  @State FindBook:string = '正在整理本地封面'
+  @State FindBookOver:string = '本地封面已就绪'
   @State Loading:boolean = true
   //弹窗组件
   @State isWindowShow:boolean = false
@@ -194,7 +194,7 @@ struct BookEditorPage {
         ListItem(){
           Flex({wrap:FlexWrap.Wrap}){
             ForEach(this.BookIconArr2, (Item:BookEditorType,Index:number)=>{
-              Image(Item.getBookIcon())
+              Image(LocalBookAccessLogic.selectLocalCover(Item.getBookIcon(), $r('app.media.icon_book_default_cover_one')))
                 .BookIconSize()
                 .borderRadius(10)
                 .margin({left:22, bottom:24})
@@ -308,7 +308,7 @@ struct BookEditorPage {
           .width(152)
           .height(38)
           Flex({justifyContent: FlexAlign.Center, alignItems: ItemAlign.Center}){
-            Text('封面换源')
+            Text('本地封面')
               .fontSize(14)
           }
           .borderRadius(7)

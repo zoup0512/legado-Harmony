@@ -1,5 +1,3 @@
-import { BookSource } from "./BookSource";
-
 @Observed
 export class Books {
   //书籍ID
@@ -72,6 +70,4 @@ export class Books {
   isJoin:boolean = false
   //是否本地导入
   isLocalBook:boolean = false
-  source?:BookSource
-  sourceList?:BookSource[] = []
 }

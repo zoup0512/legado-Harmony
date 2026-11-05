@@ -26,7 +26,7 @@ struct AboutUsPage {
         try {
           const request: Want = {
             parameters: {
-              bundleName: 'com.legado.app'
+              bundleName: 'com.razor.h.reader'
             }
           };
           productViewManager.loadProduct(getContext(this) as common.UIAbilityContext, request, {

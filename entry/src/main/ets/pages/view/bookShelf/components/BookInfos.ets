@@ -1,9 +1,12 @@
 import { Books } from '../../../../database/entities/Books'
-import { common } from '@kit.AbilityKit'
 import { router } from '@kit.ArkUI'
 import BookInfoDialogs from './dialog/BookInfoDialogs'
 import FontConstants from '../../../../common/constants/FontConstants'
-import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../common/utils/ServerApi'
+import {
+  isReadableLocalBook,
+  LocalBookAccessLogic,
+  LOCAL_BOOK_MISSING_MESSAGE
+} from '../../../../common/utils/LocalBookAccess'
 import { showMessage } from '../../../../componets/common/promptShow'
 
 @Component
@@ -58,7 +61,7 @@ export default struct BookInfos {
                 .backgroundColor('rgba(0, 0, 0, 0.45)')
                 .zIndex(1)
             }
-            Image(this.book.coverUrl)
+            Image(LocalBookAccessLogic.selectLocalCover(this.book.coverUrl, $r('app.media.icon_book_default_cover_one')))
               .draggable(false)
               .alt($r('app.media.icon_book_default_cover_one'))
               .width(60)
@@ -92,29 +95,14 @@ export default struct BookInfos {
           }.alignItems(HorizontalAlign.Start)
         }.alignItems(HorizontalAlign.Start)
       }
-    }.onClick(async () => { // todo: 暂时屏蔽书籍详情页
-      if (this.book.origin === SERVER_SHELF_ORIGIN) {
-        try {
-          const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-          const local = await ServerApi.ensureLocalBook(context, this.book)
-          router.pushUrl({
-            url: 'pages/view/Reader/ReaderPage3', params: { bookData: local }
-          })
-        } catch (e) {
-          showMessage('服务器书下载失败：' + (e instanceof Error ? e.message : '网络错误'))
-        }
+    }.onClick(() => {
+      if (!isReadableLocalBook(this.book.bookUrl)) {
+        showMessage(LOCAL_BOOK_MISSING_MESSAGE)
         return
       }
       router.pushUrl({
         url: 'pages/view/Reader/ReaderPage3', params: { bookData: this.book }
       })
-
-      // clickUtil.preventClick(()=>{
-      //   router.pushUrl({
-      //     url: 'pages/view/BookDetailPage',
-      //     params: this.book
-      //   })
-      // })
     }).gesture(
       LongPressGesture({ repeat: false, duration: 500 })
         .onAction((event: GestureEvent) => {

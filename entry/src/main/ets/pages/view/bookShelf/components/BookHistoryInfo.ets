@@ -2,11 +2,18 @@ import confirmDialogExample from '../../../../componets/common/confirmDialog'
 import { Books } from '../../../../database/entities/Books'
 import { router } from '@kit.ArkUI'
 import { showMessage } from '../../../../componets/common/promptShow'
-import BookInfoDialogs from './dialog/BookInfoDialogs'
 import booksUtil from '../../../../common/utils/booksUtils'
 import { BookHistory } from '../../../../database/entities/BookHistory'
 import bookHistoryUtils from '../../../../common/utils/BookHistoryUtils'
 import clickUtil from '../../../../common/utils/ClickUtils'
+import {
+  isReadableLocalBook,
+  LocalBookAccessLogic,
+  LOCAL_BOOK_MISSING_MESSAGE
+} from '../../../../common/utils/LocalBookAccess'
+import BooksDao from '../../../../database/dao/BooksDao'
+import BookHistoryDao from '../../../../database/dao/BookHistoryDao'
+import privacySessionService from '../../../../privacy/PrivacySessionService'
 
 @Component
   /**
@@ -17,16 +24,76 @@ export default struct BookHistoryInfo {
   @Prop bookHistory: BookHistory
   @State delCache: boolean = false
   @StorageLink('BOOK_IS_BOOK_HISTORY_REFRESHING') isBookHistoryRefreshing: number = 0
+  @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch('onShelfChanged') shelfRefresh: number = 0
 
-  async aboutToAppear(): Promise<void> {
-    if (this.bookHistory.id) {
-      let bookInfo = await booksUtil.getBookByIds(this.bookHistory.id)
-      if (bookInfo && bookInfo[0]) {
-        this.book = bookInfo[0]
-      } else {
-        this.book = this.mergeBookHistoryToBooks(this.bookHistory)
-        this.book.isJoin = false
+  onShelfChanged(): void {
+    this.clearHistory()
+    if (this.active) this.loadHistory()
+  }
+
+  @State historyVisible: boolean = false
+  private active: boolean = false
+  private requestId: number = 0
+  private unsubscribePrivacy: (() => void) | undefined
+
+  aboutToAppear(): void {
+    this.active = true
+    this.unsubscribePrivacy = privacySessionService.onStateChanged((_locked: boolean): void => {
+      this.clearHistory()
+      if (this.active) this.loadHistory()
+    })
+    this.loadHistory()
+  }
+
+  aboutToDisappear(): void {
+    this.active = false
+    this.unsubscribePrivacy?.()
+    this.unsubscribePrivacy = undefined
+    this.clearHistory()
+  }
+
+  private clearHistory(): void {
+    this.requestId++
+    this.historyVisible = false
+    this.book = new Books()
+    this.bookInfoDel?.close()
+  }
+
+  private async loadHistory(): Promise<void> {
+    const request = ++this.requestId
+    const generation = privacySessionService.getGeneration()
+    this.historyVisible = false
+    try {
+      if (await BookHistoryDao.isPrivateHistory(this.bookHistory)) return
+      const id = this.bookHistory.originBookId ?? this.bookHistory.id
+      const info = id === undefined ? [] : await BooksDao.getBookByIds([id])
+      const book = info[0] ?? this.mergeBookHistoryToBooks(this.bookHistory)
+      if (!info[0]) book.isJoin = false
+      if (await BooksDao.isPrivateBook(book) || await BookHistoryDao.isPrivateHistory(this.bookHistory)) return
+      if (!this.active || request !== this.requestId || generation !== privacySessionService.getGeneration()) return
+      this.book = book
+      this.historyVisible = true
+    } catch (_) {
+      // No fallback after an ownership query failure.
+      if (request === this.requestId) this.clearHistory()
+    }
+  }
+
+  private async canUseHistory(): Promise<boolean> {
+    const generation = privacySessionService.getGeneration()
+    const request = this.requestId
+    try {
+      const privateHistory = await BookHistoryDao.isPrivateHistory(this.bookHistory)
+      const privateBook = await BooksDao.isPrivateBook(this.book)
+      if (!this.active || request !== this.requestId || generation !== privacySessionService.getGeneration() ||
+        privateHistory || privateBook) {
+        this.clearHistory()
+        return false
       }
+      return this.historyVisible
+    } catch (_) {
+      this.clearHistory()
+      return false
     }
   }
 
@@ -36,7 +103,7 @@ export default struct BookHistoryInfo {
   }
 
   build() {
-
+    if (this.historyVisible) {
     Flex(
       {
         alignItems: ItemAlign.Center,
@@ -47,7 +114,7 @@ export default struct BookHistoryInfo {
         space: 20
       }) {
         Stack() {
-          Image(this.book.coverUrl ?? '')
+          Image(LocalBookAccessLogic.selectLocalCover(this.book.coverUrl, $r('app.media.icon_book_default_cover_one')))
             .draggable(false)
             .alt($r('app.media.icon_book_default_cover_one'))
             .width(60)
@@ -84,7 +151,12 @@ export default struct BookHistoryInfo {
         }
         .alignItems(HorizontalAlign.Start)
         .onClick(() => {
-          clickUtil.preventClick(() => {
+          clickUtil.preventClick(async () => {
+            if (!await this.canUseHistory()) return
+            if (!isReadableLocalBook(this.book.bookUrl)) {
+              showMessage(LOCAL_BOOK_MISSING_MESSAGE)
+              return
+            }
             router.pushUrl({
               url: 'pages/view/BookDetailPage',
               params: this.book
@@ -123,17 +195,26 @@ export default struct BookHistoryInfo {
         .borderColor('rgb(174,174,174)')
         .borderWidth(this.book.isJoin ? 0 : 1)
         .borderRadius(50)
-        .onClick(() => {
-          if (!this.book.isJoin) {
-            this.book.id = undefined
-            booksUtil.addBooks(this.book)
-            showMessage('加入书架成功')
-            this.book.isJoin = true
-            return
+        .onClick(async () => {
+          if (!await this.canUseHistory()) return
+          const generation = privacySessionService.getGeneration()
+          const request = this.requestId
+          const book = this.book
+          let success = false
+          if (!book.isJoin) {
+            const candidate = this.mergeBookHistoryToBooks(this.bookHistory)
+            candidate.id = undefined
+            candidate.bookGroup = 3
+            success = await booksUtil.addBooks(candidate)
+          } else {
+            const id = this.bookHistory.originBookId ?? book.id
+            if (id !== undefined) success = await booksUtil.delBooksById(id)
           }
-          this.bookHistory.originBookId ? booksUtil.delBooksById(this.bookHistory.originBookId) : ''
-          this.book.isJoin = false
-          showMessage('移出书架成功')
+          if (!success || request !== this.requestId || generation !== privacySessionService.getGeneration() ||
+            !await this.canUseHistory()) return
+          book.isJoin = !book.isJoin
+          this.book = book
+          showMessage(book.isJoin ? '加入书架成功' : '移出书架成功')
         })
       }
       .justifyContent(FlexAlign.Start)
@@ -146,6 +227,7 @@ export default struct BookHistoryInfo {
         }))
     .padding(10)
     .borderRadius(10)
+    }
   }
 
   // bookInfoDialog: CustomDialogController | null = new CustomDialogController({
@@ -183,6 +265,7 @@ export default struct BookHistoryInfo {
   })
 
   async onAccept() {
+    if (!await this.canUseHistory()) return
     if (this.bookHistory.id) {
       let result = await bookHistoryUtils.deleteBookHistory(this.bookHistory.id)
       this.isBookHistoryRefreshing++

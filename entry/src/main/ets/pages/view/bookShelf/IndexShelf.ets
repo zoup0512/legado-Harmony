@@ -1,13 +1,6 @@
-import { common } from '@kit.AbilityKit'
 import BookMark from '../../../componets/head/BookMark'
 import { router } from '@kit.ArkUI'
 import BookBodyContent from './components/BookBodyContent'
-import { FileHandler } from '../../../common/utils/FileHandler'
-import { showMessage } from '../../../componets/common/promptShow'
-import { bookShelfImport } from '../../../database/entities/Books'
-import { getPasteDataSync, isNetworkUrl, sleep } from '../../../common/utils/utils'
-import booksUtil from '../../../common/utils/booksUtils'
-import axios, { AxiosResponse } from '@ohos/axios'
 import { ThemeItem } from '../../../common/model/Theme'
 import { ThemeStorageKey } from '../../../common/constants/Theme'
 import { IconTitleVo } from '../../../componetsmodel/IconTitleVo'
@@ -22,7 +15,6 @@ export default struct IndexShelf {
   @State @Watch('changeGroup') GROUP: string = '标签'
   private moreList: IconTitleVo[] = [
     new IconTitleVo($r('app.media.import_svg'), '书籍导入'),
-    new IconTitleVo($r('app.media.import_book_svg'), '导入书单'),
     new IconTitleVo($r('app.media.batch_svg'), '批量管理'),
   ]
   changeGroup() {
@@ -33,12 +25,8 @@ export default struct IndexShelf {
     }
   }
 
-  @State isShowImport: boolean = false
-  @State isShowImportBookList: boolean = false
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageProp('APP_INDEX_SCROLLABLE') APP_INDEX_SCROLLABLE: boolean = false
-  @StorageLink('BOOK_IS_BOOK_REFRESHING') isBookRefreshing: number = 0
-  @State bookImport: bookShelfImport[] = []
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   tabsController: TabsController = new TabsController();
@@ -82,48 +70,17 @@ export default struct IndexShelf {
           .listDirection(Axis.Horizontal)
         }
 
-        Row() {
-          Flex() {
-          }
-          .width(0)
-          .height(0)
-          .bindSheet($$this.isShowImportBookList, this.ImportBookListDialog(), {
-            // 书单导入弹窗绑定元素
-            height: 240,
-            showClose: false,
-            dragBar: false,
-            backgroundColor: "white",
-            blurStyle: BlurStyle.COMPONENT_ULTRA_THIN,
-            onDisappear: () => {
-              // this.clickBookType = ''
-            }
-          })
-
-          Row({ space: 16 }) {
-            // 隐私文件夹入口：书架常驻露出
-            Image($r('app.media.privacy_lock')).width(24)
-              .accessibilityText('隐私文件夹')
-              .onClick(() => {
-                router.pushUrl({
-                  url: 'pages/view/myCenter/PrivacyFolder'
-                });
-              })
-            Image($r('app.media.search')).width(24).onClick(() => {
+        Row({ space: 16 }) {
+          // 隐私文件夹入口：书架常驻露出
+          Image($r('app.media.privacy_lock')).width(24)
+            .accessibilityText('隐私文件夹')
+            .onClick(() => {
               router.pushUrl({
-                url: 'pages/view/search/SearchBook'
+                url: 'pages/view/myCenter/PrivacyFolder'
               });
             })
-            Image($r('app.media.more')).width(24)
-              .bindMenu(this.MenuBuilder())
-              .bindSheet($$this.isShowImport, this.ImportDialog(), {
-                // 书籍导入弹窗绑定元素
-                height: 200,
-                showClose: false,
-                dragBar: false,
-                backgroundColor: "rgba(0, 0, 0, 0.15)",
-                blurStyle: BlurStyle.COMPONENT_ULTRA_THIN,
-              })
-          }
+          Image($r('app.media.more')).width(24)
+            .bindMenu(this.MenuBuilder())
         }.margin({ bottom: 12 })
       }
       .padding({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight, left: 20, right: 20 })
@@ -175,173 +132,23 @@ export default struct IndexShelf {
           isBorder: this.moreList.length !== index + 1
         })
           .onClick(() => {
-            this.changeTheme(index)
+            this.handleMoreAction(index)
           })
       })
     }
   }
-  @Builder
-  // 书籍导入UI盒子
-  ImportClickBox(index: number, image: string, text: string) {
-    Column({ space: 8 }) {
-      Flex() {
-        Image($r(`${image}`))
-          .width(24)
-      }
-      .width(48)
-      .height(48)
-      .borderRadius(24)
-      .borderColor("rgba(0, 0, 0, 0.15)")
-      .backgroundColor("white")
-      .borderWidth(1)
-      .padding(12)
 
-      Text(text)
-        .lineHeight(20)
-        .font({
-          size: 12,
-          weight: 400
-        })
-    }
-    .padding({
-      top: 16,
-      bottom: 12,
-      left: 21,
-      right: 21
-    })
-    .onClick(async () => {
-      switch (index) {
-        case 0:
-          // 本地导入
-          this.isShowImport = false
-          router.pushUrl({
-            url: 'pages/view/bookShelf/LocalImportPage',
-            params: {
-              bookType: this.currentIndex
-            }
-          })
-          break
-        case 3:
-          // 书单粘贴导入
-          this.pasteBookImport()
-          break
-        case 4:
-          //书单本地导入
-          let res = await FileHandler.documentPickerFile(
-            this.getUIContext().getHostContext() as common.UIAbilityContext, ['.json'])
-          if (res.length === 0) {
-            return
-          }
-          FileHandler.ReadJSONFile(res[0]).then(async result => {
-            if (result.length > 0) {
-              this.bookImport = JSON.parse(result) as bookShelfImport[]
-              this.bookImport.length > 0 ? await booksUtil.batchAdd(this.bookImport, this.currentIndex) : ''
-              showMessage(this.bookImport.length > 0 ? `相关书单书籍内容导入${this.bookImport.length}本` :
-                '未找到相关书单书籍内容')
-            }
-          })
-          setTimeout(() => {
-            this.isBookRefreshing++
-          }, 500)
-          break
-        case 5:
-          // 服务器书架：下载服务器书籍后阅读
-          this.isShowImport = false
-          router.pushUrl({
-            url: 'pages/view/ServerShelf/ServerShelfPage'
-          })
-          break
-      }
-    })
-  }
-
-  @Builder
-  // 书籍导入弹窗
-  ImportDialog() {
-    Column() {
-      GridRow({
-        columns: 2
-      }) {
-        GridCol() {
-          this.ImportClickBox(0, "app.media.my_center_file_icon", "本地导入")
-        }
-
-        GridCol() {
-          this.ImportClickBox(5, "app.media.my_center_cloud_icon", "服务器书架")
-        }
-      }
-      .height("60%")
-
-      Divider()
-
-      Column() {
-        Text('取消').fontSize(16).fontWeight(400)
-          .lineHeight(24)
-      }
-      .onClick(() => {
-        this.isShowImport = false
-      })
-      .alignItems(HorizontalAlign.Center)
-      .padding({
-        top: 16
-      })
-    }
-  }
-
-  @Builder
-  // 导入书单弹窗
-  ImportBookListDialog() {
-    Column() {
-      Flex({
-        direction: FlexDirection.Row,
-        wrap: FlexWrap.Wrap,
-        alignContent: FlexAlign.Center,
-        justifyContent: FlexAlign.Start
-      }) {
-        Grid() {
-          GridItem() {
-            this.ImportClickBox(3, "app.media.Paste", "粘贴导入")
-          }
-
-          GridItem() {
-            this.ImportClickBox(4, "app.media.my_center_file_icon", "本地导入")
-          }
-        }
-        .columnsTemplate("1fr 1fr 1fr 1fr")
-        .padding({
-          top: 12
-        })
-      }
-      .height("60%")
-
-      Divider()
-
-      Column() {
-        Text('取消').fontSize(16).fontWeight(400)
-          .lineHeight(24)
-      }
-      .onClick(() => {
-        this.isShowImportBookList = false
-      })
-      .alignItems(HorizontalAlign.Center)
-      .padding({
-        top: 16
-      })
-    }
-  }
-
-  changeTheme(themeNum: number) {
-    // 右上角更多
-    switch (themeNum) {
+  handleMoreAction(index: number) {
+    switch (index) {
       case 0:
-        // 书籍导入弹窗
-        this.isShowImport = true
+        router.pushUrl({
+          url: 'pages/view/bookShelf/LocalImportPage',
+          params: {
+            bookType: this.currentIndex
+          }
+        })
         break
       case 1:
-        // 导入书单弹窗
-        this.isShowImportBookList = true
-        break
-      case 2:
         router.pushUrl({
           url: 'pages/view/bookShelf/Manage/BookManagePage',
           params: {
@@ -351,32 +158,6 @@ export default struct IndexShelf {
           }
         })
         break
-    }
-  }
-
-  //书单粘贴导入
-  async pasteBookImport() {
-    try {
-      let url = getPasteDataSync()
-      if (!url) {
-        showMessage('未获取到粘贴信息，请求默认数据')
-        await sleep()
-        return
-      }
-      if (!isNetworkUrl(url ?? '')) {
-        showMessage('复制的链接不正确')
-        await sleep()
-        url = undefined
-        return
-      }
-      const res: AxiosResponse = await axios
-        .get(url);
-      this.bookImport = res.data as bookShelfImport[]
-      showMessage(this.bookImport.length > 0 ? `相关书单书籍内容导入${this.bookImport.length}本` :
-        '未找到相关书单书籍内容')
-      this.bookImport.length > 0 ? booksUtil.batchAdd(this.bookImport, this.currentIndex) : ''
-    } catch (err) {
-      console.error('错误 ' + err);
     }
   }
 }

@@ -1,6 +1,7 @@
 import CommonConstants from '../../common/constants/CommonConstants'
 import { PublicConstants } from '../../common/constants/PublicConstants'
 import { readBookList } from '../dataList/readBookList'
+import { LocalBookAccessLogic } from '../../common/utils/LocalBookAccess'
 
 
 @Component
@@ -105,7 +106,7 @@ export struct readStatisticsDataList{
                Row(){
                  Row(){
                    //封面
-                   Image(book.coverImage)
+                   Image(LocalBookAccessLogic.selectLocalCover(book.coverImage, $r('app.media.icon_book_default_cover_one')))
                      .size({width:60,height:80})
                    //书名作者及阅读时长
                    this.bookAuthor(book)

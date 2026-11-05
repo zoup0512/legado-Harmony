@@ -13,6 +13,7 @@ import { WindowAbility } from './WindowAbility';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import BrightnessUtil from '../../common/utils/BrightnessUtil';
 import privacySessionService from '../privacy/PrivacySessionService';
+import privacyCredentialService from '../privacy/PrivacyCredentialService';
 
 export default class EntryAbility extends UIAbility {
   private curBp: string = ''
@@ -39,7 +40,9 @@ export default class EntryAbility extends UIAbility {
   }
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
-    webview.WebviewController.initializeWebEngine() //初始化web控件
+    privacyCredentialService.init(this.context);
+    // 保留本地 ReaderKit 排版可能使用的底层引擎初始化，不创建 WebView 或发起网络请求。
+    webview.WebviewController.initializeWebEngine()
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate');
     AppUtil.init(this.context);
     WindowAbility.getInstance().initContext(this.context)
@@ -59,8 +62,6 @@ export default class EntryAbility extends UIAbility {
     // 获取本地文件存储路径
     const pathDir = this.context.filesDir;
     AppStorage.setOrCreate('pathDir', pathDir);
-    // 书源存入的地址
-    AppStorage.setOrCreate('pathBookSource', pathDir + '/bookSource.json');
     // Main window is created, set main page for this ability
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
     // 全屏

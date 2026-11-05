@@ -22,6 +22,7 @@ import { ThemeItem } from '../../../../common/model/Theme';
 import { ThemeStorageKey } from '../../../../common/constants/Theme';
 import privacyFolderService from '../../../../privacy/PrivacyFolderService';
 import privacySessionService from '../../../../privacy/PrivacySessionService';
+import { LocalBookAccessLogic } from '../../../../common/utils/LocalBookAccess';
 
 class routerParams {
   currentIndex:number
@@ -101,13 +102,11 @@ struct BookManagePage {
     })
   }
   //书籍
-  getBookList(){
-    booksDao.searchPage({
-      type:this.currentIndex,
-      bookGroup:this.bookTypeNumber
-    },1,100).then((val)=>{
-      this.bookList = val
-    })
+  async getBookList(): Promise<void> {
+    const generation = privacySessionService.getGeneration();
+    const books = await booksDao.searchPage({ type: this.currentIndex, bookGroup: this.bookTypeNumber }, 1, 100);
+    if (generation !== privacySessionService.getGeneration()) return;
+    this.bookList = books;
   }
   //分组
   getGroupList(){
@@ -431,14 +430,14 @@ struct BookManagePage {
     }
     const ids = this.checkListNumber.slice();
     const selected = this.bookList.filter(book => book.id !== undefined && ids.includes(book.id));
-    if (selected.length !== ids.length || selected.some(book => !book.isLocalBook)) {
+    if (selected.length !== ids.length || selected.some(book => !LocalBookAccessLogic.isLocalFilePath(book.bookUrl))) {
       showMessage('仅支持移入本地书籍，请取消选择非本地书籍');
       return;
     }
     this.privacyBusy = true;
     AlertDialog.show({
       title: '移入隐私文件夹',
-      message: `确定移入选中的 ${selected.length} 本本地书籍？目前仅在应用内隐藏分组，不是加密。确认后需要通过系统身份认证，原文件和缓存不会删除。`,
+      message: `确定移入选中的 ${selected.length} 本本地书籍？目前仅在应用内隐藏分组，不是加密。确认后需要通过 PIN 解锁，原文件和缓存不会删除。`,
       autoCancel: false,
       primaryButton: { value: '取消', action: () => { this.privacyBusy = false; } },
       secondaryButton: { value: '确认移入', action: () => { this.moveToPrivacy(selected); } },
@@ -450,23 +449,28 @@ struct BookManagePage {
     let success = 0;
     let failed = 0;
     try {
-      if (!await privacySessionService.unlock()) {
-        showMessage(privacySessionService.getLastFailureMessage() || '认证失败，请重试');
-        return;
-      }
+      if (!await privacySessionService.unlock(this.getUIContext())) return;
+      const generation = privacySessionService.getGeneration();
+      const valid = (): boolean => privacySessionService.isUnlocked() &&
+        privacySessionService.getGeneration() === generation;
       for (const book of selected) {
+        if (!valid()) break;
         try {
-          if (await privacyFolderService.moveIn(book)) success++;
+          if (await privacyFolderService.moveIn(book, generation)) success++;
           else failed++;
         } catch (_) {
           failed++;
         }
+        if (!valid()) break;
       }
+      if (!valid()) return;
       this.checkListNumber = [];
       this.checkLists = {};
       this.allCheck = false;
       this.topTitle = '置顶';
-      this.bookList = await booksDao.searchPage({ type: this.currentIndex, bookGroup: this.bookTypeNumber }, 1, 100);
+      const books = await booksDao.searchPage({ type: this.currentIndex, bookGroup: this.bookTypeNumber }, 1, 100);
+      if (!valid()) return;
+      this.bookList = books;
       this.isBookRefreshing++;
       showMessage(`移入成功 ${success} 本，失败 ${failed} 本`);
     } finally {
@@ -502,23 +506,28 @@ struct BookManagePage {
     customStyle: false,
     cornerRadius: 25,
   })
-  //删除功能
-  manageDelete(){
-    this.checkListNumber.forEach((item:number)=>{
-      switch (this.bookTypeNumber){
-        case 1:
-          bookGroupUtil.delGroupById(item); break;
-        case 5:
-          worksListsUtils.delWorksByIds(item);break;
-        default:
-          booksUtil.delBooksById(item);break;
+  // Revalidate selection when confirmation is accepted, not when the dialog opened.
+  async manageDelete(): Promise<void> {
+    const ids = this.checkListNumber.slice();
+    if (this.bookTypeNumber === 1 && ids.includes(99)) return;
+    if (this.bookTypeNumber === 1 || this.bookTypeNumber === 5) {
+      for (const id of ids) {
+        if (this.bookTypeNumber === 1) await bookGroupUtil.delGroupById(id);
+        else await worksListsUtils.delWorksByIds(id);
       }
-    })
-    setTimeout(()=>{
-      this.refreshData()
-      showMessage('已删除')
-    },500)
-    this.delDialog?.close()
+    } else {
+      try {
+        if (await booksDao.isPrivateBookIds(ids) && !await privacySessionService.unlock(this.getUIContext())) return;
+        const generation = privacySessionService.getGeneration();
+        if (!await booksUtil.delBooksById(ids, generation) || generation !== privacySessionService.getGeneration()) return;
+      } catch (_) {
+        return;
+      }
+    }
+    this.refreshData();
+    this.isBookRefreshing++;
+    this.delDialog?.close();
+    showMessage('已删除');
   }
   //是否隐藏分组弹窗
   clickHideDialog: CustomDialogController | null = new CustomDialogController({

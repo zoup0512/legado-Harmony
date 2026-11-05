@@ -16,6 +16,8 @@ import worksListsUtils from '../../../common/utils/WorksListsUtils'
 import BooksDao from '../../../database/dao/BooksDao'
 import { Books } from '../../../database/entities/Books'
 import PaddingConstants from '../../../common/constants/PaddingConstants'
+import { LocalBookAccessLogic } from '../../../common/utils/LocalBookAccess'
+import { getPrivacyGeneration } from '../../../privacy/PrivacyAccessGuard'
 
 @CustomDialog
 @Preview
@@ -24,21 +26,47 @@ export default struct shareWorksBook {
   controller?: CustomDialogController
   @Prop works:WorksLists
   @State bookList:Books[] = []
+  @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch('onBooksChanged') bookRefresh: number = 0
+  private active: boolean = false
+  private requestId: number = 0
+
+  onBooksChanged(): void {
+    this.requestId++
+    this.bookList = []
+    this.controller?.close()
+  }
 
   async aboutToAppear(): Promise<void> {
+    this.active = true
     if (this.works.worksBookList) {
-      let bookIds = worksListsUtils.getBookIds(this.works.worksBookList)
-      if (bookIds.length > 0) {
-        this.getBookIds(bookIds)
-      }
+      const bookIds = worksListsUtils.getBookIds(this.works.worksBookList)
+      if (bookIds.length > 0) await this.getBookIds(bookIds)
     }
+  }
+
+  aboutToDisappear(): void {
+    this.active = false
+    this.requestId++
+    this.bookList = []
   }
   private appContext: common.Context = getContext(this);
   private atManager = abilityAccessCtrl.createAtManager();
-  getBookIds(ids:number[]){
-    BooksDao.getBookByIds(ids).then((val)=>{
-      this.bookList = val
-    })
+  async getBookIds(ids: number[]): Promise<void> {
+    const requestId = ++this.requestId
+    const generation = getPrivacyGeneration()
+    this.bookList = []
+    try {
+      const books = await BooksDao.getBookByIds(ids)
+      const publicBooks: Books[] = []
+      for (const book of books) {
+        if (!await BooksDao.isPrivateBook(book)) publicBooks.push(book)
+      }
+      if (this.active && requestId === this.requestId && generation === getPrivacyGeneration()) {
+        this.bookList = publicBooks
+      }
+    } catch (_) {
+      if (requestId === this.requestId) this.bookList = []
+    }
   }
 
   build() {
@@ -191,7 +219,7 @@ export default struct shareWorksBook {
       Row({
         space:PaddingConstants.PADDING_10
       }){
-        Image(book.coverUrl)
+        Image(LocalBookAccessLogic.selectLocalCover(book.coverUrl, $r('app.media.icon_book_default_cover_one')))
           .draggable(false)
           .alt($r('app.media.icon_book_default_cover_one'))
           .width(69)

@@ -14,6 +14,8 @@ import { WorksBookList } from '../../../../../database/entities/WorksBookList'
 import { WorksLists, WORK_BOOK_LIST_STATUS } from '../../../../../database/entities/WorksLists'
 import shareWorksBook from '../../../dialog/shareWorksBook'
 import newAddShelf from './newAddShelf'
+import { LocalBookAccessLogic } from '../../../../../common/utils/LocalBookAccess'
+import { getPrivacyGeneration } from '../../../../../privacy/PrivacyAccessGuard'
 
 @Component
 export default struct newBookShelf{
@@ -26,6 +28,22 @@ export default struct newBookShelf{
   @Prop bookIds:number[] = []
   @State  @Watch('changeBookIds')newBookIds:number[] = []
   @State isShowAddBook:boolean = false
+  @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch('onBooksChanged') bookRefresh: number = 0
+  private active: boolean = false
+  private loadRequestId: number = 0
+
+  onBooksChanged(): void {
+    this.addBooksList = []
+    this.getBookIds()
+  }
+
+  aboutToDisappear(): void {
+    this.active = false
+    this.loadRequestId++
+    this.addBooksList = []
+    this.shareShelfBookDialog?.close()
+  }
+
   changeShowNumber:Function = (_index:number)=>{
 
   }
@@ -40,6 +58,7 @@ export default struct newBookShelf{
   @Prop returnClose:boolean = false
 
   async aboutToAppear(): Promise<void> {
+    this.active = true
     if (this.workBookListStatus === 0) {
       this.newBookIds = this.bookIds
     } else {
@@ -66,24 +85,31 @@ export default struct newBookShelf{
       }
     }
   }
-  getBookIds(){
+  async getBookIds(): Promise<void> {
+    const requestId = ++this.loadRequestId
+    const generation = getPrivacyGeneration()
+    this.addBooksList = []
     this.workBookList.worksBookList = []
-    BooksDao.getBookByIds(this.newBookIds).then((val)=>{
-      this.addBooksList = val
-      this.addBooksList.forEach((item: Books) => {
-        const exists = this.workBookList.worksBookList?.some(book => book.bookId === item.id);
-        if (item.id && !exists) {
-          this.TextRecommend[item.id] = this.TextRecommend[item.id] ?? '';
+    try {
+      const books = await BooksDao.getBookByIds(this.newBookIds)
+      const publicBooks: Books[] = []
+      for (const book of books) {
+        if (!await BooksDao.isPrivateBook(book)) publicBooks.push(book)
+      }
+      if (!this.active || requestId !== this.loadRequestId || generation !== getPrivacyGeneration()) return
+      this.addBooksList = publicBooks
+      for (const item of publicBooks) {
+        if (item.id !== undefined) {
+          this.TextRecommend[item.id] = this.TextRecommend[item.id] ?? ''
+          const entry = new WorksBookList()
+          entry.bookId = item.id
+          entry.recommend = this.TextRecommend[item.id]
+          this.workBookList.worksBookList?.push(entry)
         }
-
-        if (!exists) {
-          let books = new WorksBookList();
-          books.bookId = item.id;
-          books.recommend = '';
-          this.workBookList.worksBookList?.push(books);
-        }
-      });
-    })
+      }
+    } catch (_) {
+      if (requestId === this.loadRequestId) this.addBooksList = []
+    }
   }
 
   @State delBookIds:number = 0
@@ -337,11 +363,15 @@ export default struct newBookShelf{
           showMessage('书单名称不能为空!')
           return
         }
-        //默认取书籍的第一个封面为书单封面
-        if(this.addBooksList.length > 0){
-          this.workBookList.worksCoverUrl = this.addBooksList[0].coverUrl ?? ''
+        const generation = getPrivacyGeneration()
+        await this.getBookIds()
+        if (!this.active || generation !== getPrivacyGeneration()) return
+        this.workBookList.worksCoverUrl = this.addBooksList[0]?.coverUrl ?? ''
+        const saved = await worksListsUtils.addWorksLists(this.workBookList)
+        if (!saved || !this.active || generation !== getPrivacyGeneration()) {
+          showMessage('书单保存失败，请检查书籍状态后重试')
+          return
         }
-        await worksListsUtils.addWorksLists(this.workBookList)
         showMessage(this.workBookListStatus === 0?'创建书单成功':'修改书单成功')
         this.initWorkData()
         this.changeShowNumber(0)
@@ -364,7 +394,7 @@ export default struct newBookShelf{
             Text('置顶').fontColor(Color.White).fontWeight(300).fontSize(8).padding(3).borderRadius(5)
               .backgroundColor('rgba(0, 0, 0, 0.45)').zIndex(1)
           }
-          Image(book.coverUrl)
+          Image(LocalBookAccessLogic.selectLocalCover(book.coverUrl, $r('app.media.icon_book_default_cover_one')))
             .draggable(false)
             .alt($r('app.media.icon_book_default_cover_one'))
             .width(69)

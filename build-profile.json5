@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BFF7DE7028EB349B5FDA7C7C397D339D948CE2C9D7A3F8CF8F21171B7D52BFFCADFE2B634D27CA8",
+          "keyPassword": "0000001B4A9B9FC0C4A04376E99DA7B6A7040AE9095B0C6B207BDC268DF53782A3D17E062EB9C3F2466146",
           "profile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p12",
-          "storePassword": "0000001B6EDC9512A454B8126A97DF1A3231827CDBE3C01B910EBDCD70DFC4CB83AA1811711F836BF64430"
+          "storePassword": "0000001BE93F9381470B057C78F594C4858CBEA7A05E39AE57289E964F18470822A6097A21FFF90849D28C"
         }
       }
     ],

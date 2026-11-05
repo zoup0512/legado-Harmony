@@ -4,7 +4,6 @@
  * @className: Books
  * 书籍
  */
-import { BookSource } from './BookSource';
 import { readerCore } from '@kit.ReaderKit';
 
 @Observed
@@ -79,7 +78,7 @@ export class Books {
   updateTime?: number = 0
   //是否加入书架
   isJoin: boolean = false
-  //是否本地导入（服务器书下载到本地后同样为 true）
+  //是否本地导入（含旧版已下载到本地的缓存书）
   isLocalBook: boolean = false
   //本地导入时记录的原文件大小，用于重复检测
   localFileSize?: number = 0
@@ -87,7 +86,7 @@ export class Books {
   localFileModified?: number = 0
   //本地导入文件的 SHA-256，用于可靠重复检测
   localFileHash?: string
-  //服务器书的稳定远端标识（如 local://uuid），bookUrl 始终保存本地文件路径
+  //旧版稳定远端标识（如 local://uuid），仅为兼容旧记录和阅读进度保留；bookUrl 保存本地文件路径
   serverBookUrl?: string
   //最近一次下载时服务器原文件大小
   serverFileSize: number = 0
@@ -97,22 +96,6 @@ export class Books {
   serverFileName?: string
   //服务器原文件有更新，等待重新下载
   serverUpdateAvailable: boolean = false
-  source?: BookSource
-  sourceList?: BookSource[] = []
-}
-
-export class bookShelfImport {
-  name: string = ""
-  author: string = ""
-  intro: string = ""
-  bookUrl: string = ""
-
-  constructor(bookShelf: bookShelfImport) {
-    this.name = bookShelf.name
-    this.author = bookShelf.author
-    this.intro = bookShelf.intro
-    this.bookUrl = bookShelf.bookUrl
-  }
 }
 
 export const BOOK_SEARCH_TYPE: string[] = ['最近阅读', '更新排序', '手动排序']

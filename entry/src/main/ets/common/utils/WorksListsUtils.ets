@@ -8,14 +8,33 @@ import worksListsDao from '../../database/dao/WorksListsDao'
 import { WorksBookList } from '../../database/entities/WorksBookList'
 import { WorksLists } from '../../database/entities/WorksLists'
 import ToolsUtils from './ToolsUtils'
+import BooksDao from '../../database/dao/BooksDao'
+import { getPrivacyGeneration } from '../../privacy/PrivacyAccessGuard'
 
 export class WorksListsUtils{
-  async addWorksLists(worksLists:WorksLists){
-     worksListsDao.insert(worksLists)
-   }
+  private async canSavePublicList(works: WorksLists, generation: number): Promise<boolean> {
+    const ids = this.getBookIds(works.worksBookList ?? [])
+    return !await BooksDao.isPrivateBookIds(ids) && generation === getPrivacyGeneration()
+  }
 
-  async updateWorksLists(worksLists:WorksLists){
-    worksListsDao.update(worksLists)
+  async addWorksLists(worksLists: WorksLists): Promise<boolean> {
+    const generation = getPrivacyGeneration()
+    try {
+      if (!await this.canSavePublicList(worksLists, generation)) return false
+      return await worksListsDao.insert(worksLists)
+    } catch (_) {
+      return false
+    }
+  }
+
+  async updateWorksLists(worksLists: WorksLists): Promise<boolean> {
+    const generation = getPrivacyGeneration()
+    try {
+      if (!await this.canSavePublicList(worksLists, generation)) return false
+      return await worksListsDao.update(worksLists)
+    } catch (_) {
+      return false
+    }
   }
 
   async delWorksByIds(id:number|number[]){

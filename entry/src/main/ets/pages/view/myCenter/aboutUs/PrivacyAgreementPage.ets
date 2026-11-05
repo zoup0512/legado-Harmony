@@ -6,10 +6,11 @@ struct PrivacyAgreementPage {
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @State rowsData: Array<string> = [
-    '本应用没有服务端,不收集任何用户信息,只采用了Google Firebase收集崩溃报告和性能报告. ',
-    '本应用网络同步和备份采用webDav协议,由用户自己提供同步服务.',
-    '存储权限用来打开本地文件和本地备份恢复. 其它一些权限是Google Firebase需要.',
-    '本应用为开源软件,内置js引擎,因书源调用js发生的任何问题由用户自行承担.'
+    '本应用是纯本地阅读工具，不提供书源、网页抓取、订阅或服务器同步功能，不申请网络权限，不接入统计或崩溃报告服务。',
+    '通过系统文件选择器访问您选择的文件或目录；导入时在应用沙箱内保存书籍副本，不删除原文件。书架、阅读进度和设置保存在本机，不上传至服务器。',
+    '隐私文件夹首次使用时设置 6 位数字密码，密码通过随机盐和 PBKDF2 派生后保存在本机，不保存明文。可选启用系统指纹/人脸快捷解锁，本应用不读取或保存生物特征数据。',
+    '连续输错密码会暂时限制重试；只有预先启用的生物识别可用于忘记密码后的重设，无法通过该认证时不能绕过密码。隐私文件夹仅提供应用内隐藏和访问控制，不对书籍文件加密。',
+    '清除应用数据或卸载应用可能导致本地副本、阅读进度和设置丢失，请妥善保管原始书籍文件。主动跳转系统应用市场后，相关服务适用其自身的隐私政策。'
   ]
   build() {
     Column({ space: 16 }) {
@@ -45,17 +46,14 @@ struct PrivacyAgreementPage {
       .width("100%")
 
       // 内容区域
+      Scroll() {
         Column() {
           ForEach(this.rowsData, (item: string) => {
             Row() {
-              // 黑色原点
-              Column()
-                .width(4) // 设置宽度
-                .height(4) // 设置高度
-                .backgroundColor(0x000000) // 黑色背景
-                .borderRadius(2) // 半径设置为宽高的一半，形成圆形
-                .margin({ right: 8, top: -20 }) // 与文字的间隔
+              Text('•')
+                .margin({ right: 8 })
               Text(item)
+                .layoutWeight(1)
                 .lineHeight(22)
                 .font({
                   family: "PingFang SC",
@@ -64,10 +62,15 @@ struct PrivacyAgreementPage {
                   weight: 400,
                 })
             }.width("100%")
+            .alignItems(VerticalAlign.Top)
             .margin({ top: 12 })
           })
         }
         .width("100%")
+        .padding({ bottom: this.bottomRectHeight + 20 })
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
     }
     .height("100%") // 设置外部 Column 高度为 100%
     .padding({

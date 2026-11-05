@@ -6,13 +6,15 @@
  */
 import CommonConstants from '../../../../../common/constants/CommonConstants'
 import PaddingConstants from '../../../../../common/constants/PaddingConstants'
-import bookGroupUtils from '../../../../../common/utils/bookGroupUtils'
 import booksUtils from '../../../../../common/utils/booksUtils'
 import addBookTypeDialog from '../../../../../componets/common/addBookTypeDialog'
 import { showMessage } from '../../../../../componets/common/promptShow'
 import TitleContentDialog from '../../../../../componets/common/TitleContentDialog'
 import BookGroupsDao from '../../../../../database/dao/BookGroupsDao'
 import { BookGroups } from '../../../../../database/entities/BookGroups'
+import BooksDao from '../../../../../database/dao/BooksDao'
+import toolsUtils from '../../../../../common/utils/ToolsUtils'
+import privacySessionService from '../../../../../privacy/PrivacySessionService'
 
 @Component
 @CustomDialog
@@ -174,10 +176,7 @@ export default struct BookSelectGroupDialog{
   clickBookTypeDialog: CustomDialogController | null = new CustomDialogController({
     builder: TitleContentDialog({
       confirm: async ()=> {
-        await this.clickBookAccept()
-        setTimeout(()=>{
-          this.moveGroup()
-        },500)
+        if (await this.clickBookAccept()) this.moveGroup()
       },
       title:`移动分组至${this.moveTitle}`
     }),
@@ -188,18 +187,28 @@ export default struct BookSelectGroupDialog{
     cornerRadius: 25,
   })
 
- async clickBookAccept() {
-    switch (this.isMoveStatus){
-      //0标识书籍
-      case 0:
-        booksUtils.updateBooks(this.Ids,this.moveGroupId);
-        break
-      //1标识分组
-      case 1:
-        bookGroupUtils.moveBookByGroupId(this.Ids,this.moveGroupId)
-        break
+  async clickBookAccept(): Promise<boolean> {
+    try {
+      let ids = toolsUtils.numberArrays(this.Ids)
+      if (this.isMoveStatus === 1) {
+        // 99 is not a normal manageable group, even from a stale group picker.
+        if (ids.includes(99)) return false
+        ids = await BooksDao.queryBooksByGroupId(ids)
+      }
+      if (this.isMoveStatus !== 0 && this.isMoveStatus !== 1) return false
+      const privateOperation = this.oldGroupId === 99 || this.moveGroupId === 99 ||
+        await BooksDao.isPrivateBookIds(ids)
+      if (privateOperation && !await privacySessionService.unlock(this.getUIContext())) return false
+      const generation = privacySessionService.getGeneration()
+      if (privateOperation && !privacySessionService.isUnlocked()) return false
+      if (!await booksUtils.updateBooks(ids, this.moveGroupId, generation)) return false
+      if (generation !== privacySessionService.getGeneration() ||
+        (privateOperation && !privacySessionService.isUnlocked())) return false
+      showMessage(`已移动到${this.moveTitle}`)
+      return true
+    } catch (_) {
+      return false
     }
-    showMessage(`已移动到${this.moveTitle}`)
   }
 
 }

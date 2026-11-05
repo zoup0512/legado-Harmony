@@ -1,4 +1,5 @@
 import CommonConstants from '../../common/constants/CommonConstants'
+import { LocalBookAccessLogic } from '../../common/utils/LocalBookAccess'
 
 @Component
 export default struct BookOverlay {
@@ -23,7 +24,7 @@ export default struct BookOverlay {
           Text('置顶').fontColor(Color.White).fontWeight(300).fontSize(8).padding(3).borderRadius(5)
             .backgroundColor('rgba(0, 0, 0, 0.45)').zIndex(1)
         }
-        Image(this.bookImage)
+        Image(LocalBookAccessLogic.selectLocalCover(this.bookImage, $r('app.media.icon_book_default_cover_one')))
           .draggable(false)
           .alt($r('app.media.icon_book_default_cover_one'))
           .width(CommonConstants.NOVEL_IMG_WIDTH)

@@ -10,12 +10,6 @@
         "usedScene": {
           "when":"inuse"
         }
-      },
-      {
-        "name" : "ohos.permission.INTERNET",
-        "usedScene": {
-          "when":"inuse"
-        }
       }
     ],
     "deviceTypes": [

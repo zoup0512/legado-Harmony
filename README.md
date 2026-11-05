@@ -1,78 +1,62 @@
 # [English](English.md) [中文](README.md)
-<a href="https://jb.gg/OpenSourceSupport" target="_blank">
-<img width="24" height="24" src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg?_gl=1*135yekd*_ga*OTY4Mjg4NDYzLjE2Mzk0NTE3MzQ.*_ga_9J976DJZ68*MTY2OTE2MzM5Ny4xMy4wLjE2NjkxNjMzOTcuNjAuMC4w&_ga=2.257292110.451256242.1669085120-968288463.1639451734" alt="idea"/>
-</a>
 
 <div align="center">
-<img width="125" height="125" src="svg/icon.svg" alt="legado"/>  
-  
+<img width="125" height="125" src="svg/icon.svg" alt="legado"/>
+
 Legado / 开源阅读
 
-Legado is a free and open source novel reader for Harmony OS.
+面向 HarmonyOS 的开源本地书籍阅读器。
 </div>
 
+## 主要功能
 
-[![](https://img.shields.io/badge/-Contents:-696969.svg)](#contents) [![](https://img.shields.io/badge/-Function-F5F5F5.svg)](#Function-主要功能-) [![](https://img.shields.io/badge/-Community-F5F5F5.svg)](#Community-交流社区-) [![](https://img.shields.io/badge/-API-F5F5F5.svg)](#API-) [![](https://img.shields.io/badge/-Other-F5F5F5.svg)](#Other-其他-) [![](https://img.shields.io/badge/-Grateful-F5F5F5.svg)](#Grateful-感谢-) [![](https://img.shields.io/badge/-Interface-F5F5F5.svg)](#Interface-界面-)
+- 从系统文件选择器批量导入书籍，或扫描用户选择的目录。
+- 导入时复制到应用沙箱，使用 SHA-256 检测重复内容，保留用户原始文件。
+- 本地 TXT、EPUB 阅读，使用系统 ReaderKit 解析与呈现；导入器也识别 MOBI、AZW、AZW3，实际可读格式取决于系统解析器。
+- 列表 / 宫格书架、分组、置顶和批量管理。
+- 章节目录、阅读进度恢复、字号、颜色、行距、翻页与亮度设置。
+- 主题设置，以及使用 6 位数字密码保护的隐私文件夹；可选开启指纹/人脸快捷解锁。隐私文件夹用于应用内隐藏和访问控制，不对文件加密。
 
-# 开发人员详见：[Contributors](https://github.com/mgz0227/legado-Harmony/graphs/contributors)
-# Function-主要功能 [![](https://img.shields.io/badge/-Function-F5F5F5.svg)](#Function-主要功能-)
-[English](English.md)
+## 纯本地模式
 
-<details><summary>中文</summary>
-1.自定义书源，自己设置规则，抓取网页数据，规则简单易懂，软件内有规则说明。<br>
-2.列表书架，网格书架自由切换。<br>
-3.书源规则支持搜索及发现，所有找书看书功能全部自定义，找书更方便。<br>
-4.订阅内容,可以订阅想看的任何内容,看你想看<br>
-5.支持替换净化，去除广告替换内容很方便。<br>
-6.支持本地TXT、EPUB阅读，手动浏览，智能扫描。<br>
-7.支持高度自定义阅读界面，切换字体、颜色、背景、行距、段距、加粗、简繁转换等。<br>
-8.支持多种翻页模式，覆盖、仿真、滑动、滚动等。<br>
-9.软件开源，持续优化，无广告。
-</details>
+当前鸿蒙应用仅保留本地书籍阅读，不提供内置书源、书源导入、网络搜书、发现、网页抓取、RSS 订阅、服务器书架、WebDAV 或 Web 源编辑服务，不申请网络权限。
 
-<a href="#readme">
-    <img src="https://img.shields.io/badge/-返回顶部-orange.svg" alt="#" align="right">
-</a>
+“关于我们”中的检查更新由用户主动打开系统应用市场，不在应用内下载或抓取内容。
 
+### 导入与阅读
 
+1. 在书架更多菜单中选择“书籍导入”。
+2. 选择书籍文件或目录，确认待导入列表并开始导入。
+3. 从书架打开书籍，在阅读器中切换章节和调整阅读设置。
 
-# API [![](https://img.shields.io/badge/-API-F5F5F5.svg)](#API-)
-* 阅读3.0 提供了2种方式的API：`Web方式`和`Content Provider方式`。您可以在[这里](api.md)根据需要自行调用。 
-* 可通过url唤起阅读进行一键导入,url格式: legado://import/{path}?src={url}
-* path类型: bookSource,rssSource,replaceRule,textTocRule,httpTTS,theme,readConfig,dictRule,[addToBookshelf](/app/src/main/java/io/legado/app/ui/association/AddToBookshelfDialog.kt)
-* path类型解释: 书源,订阅源,替换规则,本地txt小说目录规则,在线朗读引擎,主题,阅读排版,添加到书架
+导入成功表示文件已保存，不保证所有文件都能被系统解析。无法打开时，请检查文件是否完整以及格式是否受当前设备支持。
 
-<a href="#readme">
-    <img src="https://img.shields.io/badge/-返回顶部-orange.svg" alt="#" align="right">
-</a>
+### 已有数据兼容
 
-# Other-其他 [![](https://img.shields.io/badge/-Other-F5F5F5.svg)](#Other-其他-)
-##### 免责声明
-https://gedoor.github.io/Disclaimer
+- 升级不清空书架，不自动删除旧书籍记录或已下载文件。
+- 旧服务器书籍如果已经下载到设备，可以直接本地阅读，不再检查远端更新。
+- 只有网络地址或书目信息、没有实际本地文件的旧记录不能离线阅读，打开时会提示重新导入。
+- 保留原有阅读进度和设置的存储兼容。请妥善保存原始文件；清除应用数据或卸载应用可能导致应用内副本与进度丢失。
 
-##### Harmony阅读
-* [书源规则](https://mgz0227.github.io/The-tutorial-of-Legado/)
-* [web端书架](https://github.com/gedoor/legado_web_bookshelf)
-* [web端源编辑](https://github.com/gedoor/legado_web_source_editor)
+## 隐私文件夹
 
-<a href="#readme">
-    <img src="https://img.shields.io/badge/-返回顶部-orange.svg" alt="#" align="right">
-</a>
+- 首次使用先设置并确认 6 位数字密码；没有指纹或人脸也可使用。
+- 密码不明文保存，使用随机盐和 PBKDF2-HMAC-SHA256 校验。连续错误 5 次后暂时限制重试，后续错误会延长等待时间。
+- 在隐私文件夹内可修改密码，或验证密码并完成系统认证后开启生物识别快捷解锁，默认不开启。
+- 忘记密码时，只有预先开启的生物识别可以用于重设；不可用时不能绕过密码，也不会自动删除或公开隐私书籍。请牢记密码。
+- 已有旧版隐私书但尚未设置密码时，须先通过原生物认证再建立密码；认证不可用时保留数据，不直接允许新设密码接管。
+- 离开应用自动上锁，隐私列表、详情、目录和正文会隐藏。该功能是应用内访问控制，不是文件加密，不能代替设备锁屏和文件备份。
 
+## 工程范围
 
-<a href="#readme">
-    <img src="https://img.shields.io/badge/-返回顶部-orange.svg" alt="#" align="right">
-</a>
+鸿蒙应用由 `entry`、`commons/colorLibrary` 和 `readerLibrary` 模块组成。本地导入使用 `LocalBookImportService`，当前阅读页面使用系统 ReaderKit。
 
-## Star History
+`_ref/reader-dev` 是独立参考工程，不随鸿蒙应用打包，本次本地化不修改该参考后端或任何已部署服务。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=mgz0227/legado-Harmony&type=Date)](https://star-history.com/#mgz0227/legado-Harmony&Date)
+## 免责声明
 
-# Interface-界面 [![](https://img.shields.io/badge/-Interface-F5F5F5.svg)](#Interface-界面-)
-<img src="png/start.png" width="270"><img src="png/bookshelf.png" width="270">
-<img src="png/find.png" width="270"><img src="png/rss.png" width="270">
-<img src="png/main.png" width="270">
+本应用不提供或传播图书内容。请仅导入合法拥有或已获授权的文件，并尊重著作权及适用法律。
 
-<a href="#readme">
-    <img src="https://img.shields.io/badge/-返回顶部-orange.svg" alt="#" align="right">
-</a>
+## 贡献者
+
+[Contributors](https://github.com/mgz0227/legado-Harmony/graphs/contributors)

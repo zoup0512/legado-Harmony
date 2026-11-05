@@ -1,24 +1,34 @@
 import BooksDao from '../../database/dao/BooksDao'
-import { Books, bookShelfImport, BOOK_SEARCH_TYPE } from '../../database/entities/Books'
+import { Books, BOOK_SEARCH_TYPE } from '../../database/entities/Books'
 import bookGroupUtils from './bookGroupUtils'
 import toolsUtils from './ToolsUtils'
+import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard'
 
 class booksUtils{
-  async isTopBook(id: number|number[], isTop: boolean): Promise<boolean>{
-    let Ids:number[] = toolsUtils.numberArrays(id)
+  async isTopBook(id: number | number[], isTop: boolean,
+    generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    const ids = toolsUtils.numberArrays(id)
     try {
-      Ids.forEach((item:number)=>{
-        BooksDao.isUpdateBookTop(item, isTop)
-      })
-      return true
-    } catch (e){
+      const privateOperation = await BooksDao.isPrivateBookIds(ids)
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      for (const bookId of ids) {
+        if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+        if (!await BooksDao.isUpdateBookTop(bookId, isTop, generation)) return false
+      }
+      return !privateOperation || isPrivacyGenerationValid(generation)
+    } catch (_) {
       return false
     }
   }
-  async addBooks(books: Books){
-    books.isJoin = true
-    books.bookGroup = books.bookGroup??3 //默认未分组
-    return await BooksDao.insert(books)
+  async addBooks(books: Books, generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    try {
+      if (await BooksDao.isPrivateBook(books) && !isPrivacyGenerationValid(generation)) return false
+      books.isJoin = true
+      books.bookGroup = books.bookGroup ?? 3
+      return await BooksDao.insert(books, generation)
+    } catch (_) {
+      return false
+    }
   }
   //校验当前书籍是否存在书架中
   async isExistBooks(bookUrl?:string,bookName?:string): Promise<boolean>{
@@ -27,36 +37,7 @@ class booksUtils{
   }
   //更新部分书籍信息
   async partialUpdate(books: Books){
-    BooksDao.partialUpdate(books)
-  }
-  //批量添加
-  async batchAdd(books: bookShelfImport[], bookType:number){
-    books.forEach((item:bookShelfImport)=>{
-      let book:Books = {
-        bookName: item.name,
-        bookUrl: item.bookUrl,
-        author: item.author,
-        intro: item.intro,
-        bookGroup: 3,
-        latestChapterTime: 0,
-        totalChapterNum: 0,
-        durChapterIndex: 0,
-        durChapterPos: 0,
-        durChapterTime: 0,
-        canUpdate: false,
-        sort: 0,
-        originOrder: 0,
-        syncTime: 0,
-        bookType: bookType,
-        isTop: false,
-        isJoin: true,
-        isLocalBook: false,
-        serverFileSize: 0,
-        serverFileModified: 0,
-        serverUpdateAvailable: false
-      }
-      BooksDao.insert(book)
-    })
+    await BooksDao.partialUpdate(books)
   }
   /**
    * @author 2008
@@ -64,36 +45,40 @@ class booksUtils{
    * @param group 移动到的分组Id
    * updateBooks 书籍批量移动
    */
-  async updateBooks(id:number|number[], group:number){
-    let BookGroupId: Record<number, number> = {}
-    //循环更新
-    let bookId:number[] = toolsUtils.numberArrays(id)
-    //根据书籍获取旧的分组Id
-    BookGroupId = await BooksDao.getBookIdsByGroupId(bookId)
-
-    if (Object.values(BookGroupId).map(o=>o).length === 0){
-      await bookGroupUtils.updateAddBookIds(group, bookId)
-    } else {
-      bookGroupUtils.updateMoveBookIdsByGroupId(BookGroupId)
-      //同时将新的书籍Id添加到分组中
-      bookGroupUtils.updateAddBookIds(group, bookId)
+  async updateBooks(id: number | number[], group: number,
+    generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    try {
+      const bookIds = toolsUtils.numberArrays(id)
+      const privateOperation = group === 99 || await BooksDao.isPrivateBookIds(bookIds)
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      const oldGroups = await BooksDao.getBookIdsByGroupId(bookIds)
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      if (!await BooksDao.updateBookGroup(bookIds, group, generation)) return false
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      // Group indexes must never change before the authoritative books mutation succeeds.
+      if (Object.keys(oldGroups).length > 0) bookGroupUtils.updateMoveBookIdsByGroupId(oldGroups)
+      await bookGroupUtils.updateAddBookIds(group, bookIds)
+      return !privateOperation || isPrivacyGenerationValid(generation)
+    } catch (_) {
+      return false
     }
-    //再去更新新的书籍的分组
-    bookId.forEach((item:number)=>{
-      BooksDao.updateBookGroup(item,group)
-    })
   }
 
-  async delBooksById(id:number|number[]){
-    let BookGroupId: Record<number, number> = {}
-    let bookId:number[] = toolsUtils.numberArrays(id)
-    //根据书籍获取分组Id
-    BookGroupId = await BooksDao.getBookIdsByGroupId(bookId)
-    if (Object.values(BookGroupId).map(o=>o).length > 0) {
-      bookGroupUtils.updateMoveBookIdsByGroupId(BookGroupId)
+  async delBooksById(id: number | number[],
+    generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    try {
+      const bookIds = toolsUtils.numberArrays(id)
+      const privateOperation = await BooksDao.isPrivateBookIds(bookIds)
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      const oldGroups = await BooksDao.getBookIdsByGroupId(bookIds)
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      if (!await BooksDao.deleteBook(bookIds, generation)) return false
+      if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      if (Object.keys(oldGroups).length > 0) bookGroupUtils.updateMoveBookIdsByGroupId(oldGroups)
+      return !privateOperation || isPrivacyGenerationValid(generation)
+    } catch (_) {
+      return false
     }
-
-    BooksDao.deleteBook(bookId)
   }
 
   async getBookByIds(ids:number|number[]){

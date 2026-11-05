@@ -50,12 +50,28 @@ struct LocalImportPage {
   private isPageActive: boolean = true
   private scanVersion: number = 0
   private activeScanResult: LocalBookImportScanResult | undefined
+  private unsubscribePrivacy: (() => void) | undefined
 
   aboutToAppear(): void {
     this.isPageActive = true
+    this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean): void => {
+      if (!locked || !this.toPrivacy) return
+      this.scanVersion++
+      this.cancelRequested = true
+      localBookImportService.cancelImport()
+      this.candidates = []
+      this.selectedUris = []
+      this.searchValue = ''
+      if (!this.isImporting && this.activeScanResult) {
+        localBookImportService.cleanupScanResult(this.activeScanResult)
+        this.activeScanResult = undefined
+      }
+    })
   }
 
   aboutToDisappear(): void {
+    this.unsubscribePrivacy?.()
+    this.unsubscribePrivacy = undefined
     this.isPageActive = false
     this.scanVersion++
     this.cancelRequested = true
@@ -69,18 +85,29 @@ struct LocalImportPage {
     return this.getUIContext().getHostContext() as common.UIAbilityContext
   }
 
+  private async requestUnlock(): Promise<boolean> {
+    return !this.toPrivacy || await privacySessionService.unlock(this.getUIContext())
+  }
+
+  private async authorizePickerResult(): Promise<boolean> {
+    if (!this.isPageActive) return false
+    if (!await this.requestUnlock() || !this.isPageActive) return false
+    return !this.toPrivacy || privacySessionService.isUnlocked()
+  }
+
   private async selectFiles(): Promise<void> {
     if (this.isScanning || this.isImporting) {
       return
     }
-    const version = ++this.scanVersion
+    if (!await this.requestUnlock() || !this.isPageActive) return
+    let version = ++this.scanVersion
     this.isScanning = true
     let scanResult: LocalBookImportScanResult | undefined
     try {
       const uris = await localBookImportService.pickFileUris(this.getContext())
-      if (!this.isPageActive || version !== this.scanVersion || uris.length === 0) {
-        return
-      }
+      if (uris.length === 0 || !await this.authorizePickerResult()) return
+      // Picker may background the app and lock it. Only its freshly-authorized result starts a new scan.
+      version = ++this.scanVersion
       scanResult = await localBookImportService.scanPickerUris(uris)
       if (this.isPageActive && version === this.scanVersion) {
         await this.replaceScanResult(scanResult)
@@ -97,19 +124,19 @@ struct LocalImportPage {
     if (this.isScanning || this.isImporting) {
       return
     }
+    if (!await this.requestUnlock() || !this.isPageActive) return
     if (!localBookImportService.canPickDirectory()) {
       showMessage('当前设备不支持直接选择文件夹，已切换为批量选择文件', 2000)
       await this.selectFiles()
       return
     }
-    const version = ++this.scanVersion
+    let version = ++this.scanVersion
     this.isScanning = true
     let scanResult: LocalBookImportScanResult | undefined
     try {
       const uris = await localBookImportService.pickDirectoryUris(this.getContext())
-      if (!this.isPageActive || version !== this.scanVersion || uris.length === 0) {
-        return
-      }
+      if (uris.length === 0 || !await this.authorizePickerResult()) return
+      version = ++this.scanVersion
       scanResult = await localBookImportService.scanDirectoryUri(
         this.getContext(), uris[0], this.includeSubFolders)
       if (this.isPageActive && version === this.scanVersion) {
@@ -303,17 +330,14 @@ struct LocalImportPage {
       showMessage('没有可导入的书籍')
       return
     }
-    // 存入隐私文件夹前先做系统认证，认证失败不写入任何记录
+    // Capture the generation only after successful PIN authorization.
     const targetPrivacy = this.toPrivacy
-    if (targetPrivacy) {
-      if (privacySessionService.isAuthenticating()) {
-        return
-      }
-      if (!await privacySessionService.unlock()) {
-        showMessage(privacySessionService.getLastFailureMessage() || '认证失败，请重试')
-        return
-      }
-    }
+    if (targetPrivacy && !await privacySessionService.unlock(this.getUIContext())) return
+    const generation = privacySessionService.getGeneration()
+    if (!this.isPageActive || (targetPrivacy && !privacySessionService.isUnlocked())) return
+    const batchVersion = this.scanVersion
+    const batchActive = (): boolean => this.isPageActive && batchVersion === this.scanVersion &&
+      (!targetPrivacy || (privacySessionService.isUnlocked() && privacySessionService.getGeneration() === generation))
     this.isImporting = true
     this.cancelRequested = false
     this.completed = 0
@@ -328,13 +352,16 @@ struct LocalImportPage {
         selected,
         this.bookType,
         (completed: number, total: number, _candidate: LocalBookImportCandidate): void => {
+          if (!batchActive()) return
           this.completed = completed
           this.importTotal = total
           this.candidates = this.candidates.slice()
         },
-        (): boolean => this.cancelRequested,
+        (): boolean => this.cancelRequested || !batchActive(),
         undefined,
-        targetPrivacy ? PRIVACY_BOOK_GROUP : LOCAL_BOOK_DEFAULT_GROUP)
+        targetPrivacy ? PRIVACY_BOOK_GROUP : LOCAL_BOOK_DEFAULT_GROUP,
+        generation)
+      if (!batchActive()) return
       this.completed = result.completed
       this.importTotal = result.selected
       this.candidates = this.candidates.slice()
@@ -460,7 +487,7 @@ struct LocalImportPage {
           Text('存入隐私文件夹')
             .fontSize(14)
             .fontColor(this.toPrivacy ? this.theme.mainColor : '#73000000')
-          Text('不出现在书架，导入前需人脸/指纹认证')
+          Text('不出现在书架，导入前需 PIN 解锁')
             .fontSize(11)
             .fontColor('#59000000')
         }

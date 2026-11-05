@@ -6,6 +6,7 @@ import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import BooksDao from '../../database/dao/BooksDao';
 import { Books } from '../../database/entities/Books';
+import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
 
 export const LOCAL_BOOK_FILE_SUFFIX_FILTERS: string[] = ['.txt', '.epub', '.mobi', '.azw', '.azw3'];
 export const LOCAL_BOOK_IMPORT_MAX_COUNT: number = 500;
@@ -314,7 +315,8 @@ export class LocalBookImportService {
     onProgress?: LocalBookImportProgressCallback,
     shouldCancel?: LocalBookImportCancelCheck,
     requestId: string = this.createRequestId(),
-    bookGroup: number = LOCAL_BOOK_DEFAULT_GROUP): Promise<LocalBookBatchImportResult> {
+    bookGroup: number = LOCAL_BOOK_DEFAULT_GROUP,
+    privacyGeneration: number = capturePrivacyGeneration()): Promise<LocalBookBatchImportResult> {
     this.cancelRequested = false;
     const batchResult = new LocalBookBatchImportResult();
     const selectedCandidates: LocalBookImportCandidate[] = [];
@@ -325,13 +327,15 @@ export class LocalBookImportService {
       }
     }
     batchResult.selected = selectedCandidates.length;
-    const state = await this.loadImportState();
+    const privacyAllowed = (): boolean => bookGroup !== 99 || isPrivacyGenerationValid(privacyGeneration);
+    // Do not even begin the batch's private metadata work without the original session.
+    const state = privacyAllowed() ? await this.loadImportState() : new LocalBookImportState();
     for (let index = 0; index < selectedCandidates.length; index++) {
       const candidate = selectedCandidates[index];
       const externalCancelled = shouldCancel ? shouldCancel() : false;
-      if (this.cancelRequested || externalCancelled) {
+      if (this.cancelRequested || externalCancelled || !privacyAllowed()) {
         candidate.status = LocalBookImportStatus.CANCELLED;
-        candidate.message = '已取消';
+        candidate.message = !privacyAllowed() ? '隐私会话已锁定，已停止导入' : '已取消';
         const cancelledResult = new LocalBookImportResult();
         cancelledResult.candidateId = candidate.id;
         cancelledResult.status = LocalBookImportStatus.CANCELLED;
@@ -343,7 +347,8 @@ export class LocalBookImportService {
         if (onProgress) {
           onProgress(batchResult.completed, batchResult.selected, candidate);
         }
-        const itemResult = await this.importOne(context, candidate, bookType, state, requestId, bookGroup);
+        const itemResult = await this.importOne(context, candidate, bookType, state, requestId, bookGroup,
+          privacyGeneration);
         batchResult.results.push(itemResult);
       }
       batchResult.completed++;
@@ -620,7 +625,12 @@ export class LocalBookImportService {
   }
 
   private async importOne(context: common.UIAbilityContext, candidate: LocalBookImportCandidate, bookType: number,
-    state: LocalBookImportState, requestId: string, bookGroup: number): Promise<LocalBookImportResult> {
+    state: LocalBookImportState, requestId: string, bookGroup: number,
+    privacyGeneration: number = capturePrivacyGeneration()): Promise<LocalBookImportResult> {
+    const privacyAllowed = (): boolean => bookGroup !== 99 || isPrivacyGenerationValid(privacyGeneration);
+    const verifyPrivacy = (): void => {
+      if (!privacyAllowed()) throw new Error('Privacy session expired');
+    };
     const result = new LocalBookImportResult();
     result.candidateId = candidate.id;
     let sourceFile: fs.File | undefined;
@@ -629,6 +639,7 @@ export class LocalBookImportService {
     let finalCreated = false;
     let stage = 'import.validate';
     try {
+      verifyPrivacy();
       if (!context || !context.filesDir) {
         throw new Error('Import context unavailable');
       }
@@ -647,7 +658,10 @@ export class LocalBookImportService {
         candidate.modifiedTime = Math.floor(sourceStat.mtime * 1000);
       }
       await this.ensureCandidateHash(candidate);
-      if (await this.isStoredDuplicate(candidate, state.localBooks)) {
+      verifyPrivacy();
+      const duplicate = await this.isStoredDuplicate(candidate, state.localBooks);
+      verifyPrivacy();
+      if (duplicate) {
         candidate.status = LocalBookImportStatus.DUPLICATE;
         candidate.selected = false;
         candidate.message = '书籍已存在';
@@ -671,7 +685,9 @@ export class LocalBookImportService {
       finalPath = localBooksDir + '/' + localFileName;
       tempPath = finalPath + '.importing';
       stage = 'import.copy';
+      verifyPrivacy();
       await fs.copyFile(sourceFile.fd, tempPath, 0);
+      verifyPrivacy();
       fs.closeSync(sourceFile);
       sourceFile = undefined;
       const copiedStat = fs.statSync(tempPath);
@@ -696,24 +712,27 @@ export class LocalBookImportService {
       book.localFileModified = candidate.modifiedTime;
       book.localFileHash = candidate.contentHash;
       stage = 'import.database';
-      const inserted = await BooksDao.insert(book);
+      verifyPrivacy();
+      const inserted = await BooksDao.insert(book, privacyGeneration);
       if (!inserted) {
         throw new Error('Bookshelf insert failed');
       }
+      // A lock during the DB await must stop later books, but retain this committed copy.
       finalCreated = false;
+      const sessionStillValid = privacyAllowed();
       candidate.status = LocalBookImportStatus.IMPORTED;
       candidate.message = '导入成功';
       result.status = candidate.status;
       result.message = candidate.message;
-      result.book = book;
+      if (sessionStillValid) result.book = book;
       state.localBooks.push(book);
       state.usedNames.push(book.bookName);
       return result;
     } catch (error) {
       this.logError(requestId, stage, error as BusinessError);
-      candidate.status = LocalBookImportStatus.FAILED;
+      candidate.status = privacyAllowed() ? LocalBookImportStatus.FAILED : LocalBookImportStatus.CANCELLED;
       candidate.selected = false;
-      candidate.message = '导入失败';
+      candidate.message = privacyAllowed() ? '导入失败' : '隐私会话已锁定，已停止导入';
       result.status = candidate.status;
       result.message = candidate.message;
       return result;

@@ -3,6 +3,7 @@ import FontConstants from '../../../../../common/constants/FontConstants'
 import { ThemeStorageKey } from '../../../../../common/constants/Theme'
 import { ThemeItem } from '../../../../../common/model/Theme'
 import { Books } from '../../../../../database/entities/Books'
+import { LocalBookAccessLogic } from '../../../../../common/utils/LocalBookAccess'
 
 @Component
 /**
@@ -60,7 +61,7 @@ export default struct BookInfoGridManage{
               Text('置顶').fontColor(Color.White).fontWeight(300).fontSize(8).padding(3).borderRadius(5)
                 .backgroundColor('rgba(0, 0, 0, 0.45)').zIndex(1)
             }
-            Image(this.bookData.coverUrl)
+            Image(LocalBookAccessLogic.selectLocalCover(this.bookData.coverUrl, $r('app.media.icon_book_default_cover_one')))
               .alt($r('app.media.icon_book_default_cover_one'))
               .width(100)
               .height(120)

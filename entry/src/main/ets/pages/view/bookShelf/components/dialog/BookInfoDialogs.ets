@@ -10,10 +10,14 @@ import catalogAddShelf from '../../Manage/components/catalogAddShelf'
 import PaddingConstants from '../../../../../common/constants/PaddingConstants'
 import CommonConstants from '../../../../../common/constants/CommonConstants'
 import BasicDataSource from '../../../../../common/LazyIDataSource/BasicDataSource'
-import ServerApi, { SERVER_SHELF_ORIGIN } from '../../../../../common/utils/ServerApi'
+import {
+  isReadableLocalBook,
+  LocalBookAccessLogic,
+  LOCAL_BOOK_MISSING_MESSAGE
+} from '../../../../../common/utils/LocalBookAccess'
 import privacyFolderService, { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyFolderService'
 import privacySessionService from '../../../../../privacy/PrivacySessionService'
-import { common } from '@kit.AbilityKit'
+import BooksDao from '../../../../../database/dao/BooksDao'
 
 @CustomDialog
 /**
@@ -34,22 +38,71 @@ export default struct BookInfoDialogs{
   cancel: () => void = () => {
   }
 
+  private unsubscribePrivacy: (() => void) | undefined
+  private active: boolean = false
+  @State contentVisible: boolean = false
+
   aboutToAppear(): void {
-    if (this.buttonListInfo.some((item: buttonList) => item.id === 5 || item.id === 6)) {
-      return
+    this.active = true
+    this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean): void => {
+      if (!locked) return
+      // An old overlay must not retain its private title/cover or mutation controls.
+      this.contentVisible = false
+      this.bookMoveGroup?.close()
+      this.bookDelDialog?.close()
+      this.isCatalogAddShelf = false
+      this.controller?.close()
+    })
+    this.initializePrivacy()
+  }
+
+  aboutToDisappear(): void {
+    this.active = false
+    this.unsubscribePrivacy?.()
+    this.unsubscribePrivacy = undefined
+  }
+
+  private async initializePrivacy(): Promise<void> {
+    const generation = privacySessionService.getGeneration()
+    try {
+      const privateBook = await BooksDao.isPrivateBook(this.bookData)
+      if (!this.active || generation !== privacySessionService.getGeneration()) return
+      if (privateBook && !privacySessionService.isUnlocked()) {
+        this.controller?.close()
+        return
+      }
+      this.buttonListInfo = this.buttonListInfo.filter(item => item.id !== 5 && item.id !== 6)
+      this.buttonListInfo.push(new buttonList(privateBook ? 5 : 6,
+        privateBook ? '移出隐私' : '移入隐私', privateBook ? $r('app.media.folder') : $r('app.media.hide')))
+      this.contentVisible = true
+    } catch (_) {
+      this.controller?.close()
     }
-    if (this.bookData && this.bookData.bookGroup === PRIVACY_BOOK_GROUP) {
-      this.buttonListInfo.push(new buttonList(5, '移出隐私', $r('app.media.folder')))
-    } else {
-      this.buttonListInfo.push(new buttonList(6, '移入隐私', $r('app.media.hide')))
+  }
+
+  private async authorizeCurrentBook(): Promise<number | undefined> {
+    try {
+      if (await BooksDao.isPrivateBook(this.bookData) &&
+        !await privacySessionService.unlock(this.getUIContext())) return undefined
+      const generation = privacySessionService.getGeneration()
+      const privateBook = await BooksDao.isPrivateBook(this.bookData)
+      if (!this.active || generation !== privacySessionService.getGeneration() ||
+        (privateBook && !privacySessionService.isUnlocked())) return undefined
+      return generation
+    } catch (_) {
+      return undefined
     }
+  }
+
+  private isCurrent(generation: number): boolean {
+    return this.active && generation === privacySessionService.getGeneration()
   }
 
   @State privacyBusy: boolean = false
 
   confirmMoveToPrivacy() {
     if (this.privacyBusy) return
-    if (!this.bookData.id || !this.bookData.isLocalBook) {
+    if (!this.bookData.id || !LocalBookAccessLogic.isLocalFilePath(this.bookData.bookUrl)) {
       showMessage('仅支持移入本地书籍')
       return
     }
@@ -66,14 +119,14 @@ export default struct BookInfoDialogs{
 
   async moveToPrivacy() {
     try {
-      if (!await privacySessionService.unlock()) {
-        showMessage(privacySessionService.getLastFailureMessage() || '认证失败，请重试')
-        return
-      }
-      if (!await privacyFolderService.moveIn(this.bookData)) {
+      if (!await privacySessionService.unlock(this.getUIContext())) return
+      const generation = privacySessionService.getGeneration()
+      if (!privacySessionService.isUnlocked() || !this.isCurrent(generation)) return
+      if (!await privacyFolderService.moveIn(this.bookData, generation)) {
         showMessage('移入隐私文件夹失败')
         return
       }
+      if (!this.isCurrent(generation) || !privacySessionService.isUnlocked()) return
       this.isBookRefreshing++
       this.controller?.close()
       showMessage('已移入隐私文件夹')
@@ -84,16 +137,34 @@ export default struct BookInfoDialogs{
     }
   }
 
-  //移出隐私文件夹（回到未分组书架）
-  async moveOutPrivacy() {
-    if (this.bookData.id) {
-      await privacyFolderService.moveOut(this.bookData)
-    }
-    setTimeout(() => {
+  confirmMoveOutPrivacy(): void {
+    if (this.privacyBusy) return
+    this.privacyBusy = true
+    AlertDialog.show({
+      title: '移出隐私文件夹',
+      message: '移出后该书将在未分组书架中公开显示，确定继续？',
+      autoCancel: false,
+      primaryButton: { value: '取消', action: () => { this.privacyBusy = false } },
+      secondaryButton: { value: '确认移出', action: () => { this.moveOutPrivacy() } },
+      cancel: () => { this.privacyBusy = false }
+    })
+  }
+
+  async moveOutPrivacy(): Promise<void> {
+    try {
+      if (!await privacySessionService.unlock(this.getUIContext())) return
+      const generation = privacySessionService.getGeneration()
+      if (!this.isCurrent(generation) || !privacySessionService.isUnlocked()) return
+      if (!await privacyFolderService.moveOut(this.bookData, generation) || !this.isCurrent(generation) ||
+        !privacySessionService.isUnlocked()) return
       this.isBookRefreshing++
       this.controller?.close()
-    }, 200)
-    showMessage('已移出至未分组书架')
+      showMessage('已移出至未分组书架')
+    } catch (_) {
+      showMessage('移出失败')
+    } finally {
+      this.privacyBusy = false
+    }
   }
 
   @StorageLink('topRectHeight') topRectHeight: number = 0
@@ -101,12 +172,13 @@ export default struct BookInfoDialogs{
   @State isCatalogAddShelf:boolean = false
 
   build() {
+    if (this.contentVisible) {
     Column(){
       Row(){
         Row({
           space:CommonConstants.SPACE_12
         }){
-          Image(this.bookData.coverUrl)
+          Image(LocalBookAccessLogic.selectLocalCover(this.bookData.coverUrl, $r('app.media.icon_book_default_cover_one')))
             .alt($r('app.media.icon_book_default_cover_one'))
             .width(45).height(65)
           Column({
@@ -127,19 +199,10 @@ export default struct BookInfoDialogs{
         }){
           Text('书籍详情').fontSize(12).fontWeight(400).fontColor($r('app.string.color_black_45'))
           Image($r('app.media.icon_right')).width(20).height(20).fillColor($r('app.string.color_black_45'))
-        } .onClick(async ()=>{
-          // 服务器书不进入依赖 ReaderKit 远端 URL 的详情页，直接下载/打开本地缓存
-          if (this.bookData.origin === SERVER_SHELF_ORIGIN) {
-            try {
-              const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-              const local = await ServerApi.ensureLocalBook(context, this.bookData)
-              router.pushUrl({
-                url: 'pages/view/Reader/ReaderPage3', params: { bookData: local }
-              })
-            } catch (e) {
-              showMessage('服务器书下载失败：' + (e instanceof Error ? e.message : '网络错误'))
-            }
-            this.controller?.close()
+        } .onClick(async () => {
+          if (await this.authorizeCurrentBook() === undefined) return
+          if (!isReadableLocalBook(this.bookData.bookUrl)) {
+            showMessage(LOCAL_BOOK_MISSING_MESSAGE)
             return
           }
           router.pushUrl({
@@ -191,6 +254,7 @@ export default struct BookInfoDialogs{
     .borderRadius({topLeft:20,topRight:20})
     .backgroundColor(Color.White)
     .width('100%')
+    }
   }
 
   //书单弹窗
@@ -206,8 +270,9 @@ export default struct BookInfoDialogs{
     }
   }
 
-  bookInfoButton(id:number){
+  async bookInfoButton(id: number): Promise<void> {
     if (this.privacyBusy) return
+    if (id !== 5 && id !== 6 && await this.authorizeCurrentBook() === undefined) return
     switch (id){
       case 1 :
         this.isTopBook(); break;
@@ -218,7 +283,7 @@ export default struct BookInfoDialogs{
       case 4 :
         this.bookDelDialog?.open(); break;
       case 5 :
-        this.moveOutPrivacy(); break;
+        this.confirmMoveOutPrivacy(); break;
       case 6 :
         this.confirmMoveToPrivacy(); break;
     }
@@ -239,9 +304,8 @@ export default struct BookInfoDialogs{
     cornerRadius: 25,
   })
 
-  deleteGroup() {
-    this.deleteBook()
-    this.cancel()
+  async deleteGroup(): Promise<void> {
+    await this.deleteBook()
   }
 
   exitApp() {
@@ -249,25 +313,22 @@ export default struct BookInfoDialogs{
   }
   @StorageLink('BOOK_IS_BOOK_REFRESHING') isBookRefreshing: number = 0
 
-  async deleteBook(){
-    if (this.bookData.id){
-      booksUtil.delBooksById(this.bookData.id)
-    }
-    // let index = this.booksDataSource.getIndex(this.bookData)
-    // this.booksDataSource.deleteData(index)
-    setTimeout(()=>{
-      this.isBookRefreshing++
-      this.controller?.close()
-    },200)
+  async deleteBook(): Promise<void> {
+    const generation = await this.authorizeCurrentBook()
+    if (generation === undefined || !this.bookData.id) return
+    if (!await booksUtil.delBooksById(this.bookData.id, generation) || !this.isCurrent(generation)) return
+    this.isBookRefreshing++
+    this.cancel()
+    this.controller?.close()
     showMessage('删除成功')
   }
 
   async isTopBook(){
-    if (this.bookData.id){
-      booksUtil.isTopBook(this.bookData.id, !this.bookData.isTop).then((val)=>{
-        val?showMessage(!this.bookData.isTop?'置顶成功':'取消置顶成功'):showMessage('数据更新失败')
-      })
-    }
+    const generation = await this.authorizeCurrentBook()
+    if (generation === undefined || !this.bookData.id) return
+    const success = await booksUtil.isTopBook(this.bookData.id, !this.bookData.isTop, generation)
+    if (!success || !this.isCurrent(generation)) return
+    showMessage(!this.bookData.isTop ? '置顶成功' : '取消置顶成功')
     // let index = this.booksDataSource.getIndex(this.bookData)
     // this.bookData.isTop = !this.bookData.isTop
     // if (this.bookData.isTop){
@@ -280,11 +341,8 @@ export default struct BookInfoDialogs{
     //   }
     //   this.booksDataSource.changeData(newIndex > 1?newIndex - 1:index,this.bookData)
     // }
-    setTimeout(()=>{
-      this.isBookRefreshing++
-      this.controller?.close()
-    },200)
-
+    this.isBookRefreshing++
+    this.controller?.close()
   }
   //从booksDataSource数据中查询从第一位查询最先出现isTop为false下标返回
   getIndexByIsTopFalse() {

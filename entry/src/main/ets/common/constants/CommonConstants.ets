@@ -233,20 +233,10 @@ export default class CommonConstants {
   static readonly KEY_CARTOON_BOOK_DATA:string = 'KEY_CARTOON_BOOK_DATA'
   static readonly GROUP_LIST_DATA:string = 'GROUP_LIST_DATA'
   static readonly SHELF_LIST_DATA:string = 'SHELF_LIST_DATA'
-  static readonly HAS_EXPLORE_URL:string = 'HAS_EXPLORE_URL'
   static readonly BOOK_IS_BOOK_REFRESHING:string = 'BOOK_IS_BOOK_REFRESHING'
   static readonly BOOK_IS_BOOK_GROUPS_REFRESHING:string = 'BOOK_IS_BOOK_GROUPS_REFRESHING'
   static readonly BOOK_IS_BOOK_WORKS_BOOK_LIST:string = 'BOOK_IS_BOOK_WORKS_BOOK_LIST'
   static readonly BOOK_IS_BOOK_HISTORY_REFRESHING:string = 'BOOK_IS_BOOK_HISTORY_REFRESHING'
-  // 订阅源分组数据
-  //分组是否初始化key
-  static readonly RSS_SOURCES_GROUP_INIT:string = 'RSS_SOURCES_GROUP_INIT'
-  //分组key
-  static readonly RSS_SOURCES_GROUP_LIST_DATA_KEY:string = 'RSS_SOURCES_GROUP_LIST_DATA_KEY'
-  //订阅源刷新标识
-  static readonly RSS_SOURCES_REFRESHING:string = 'RSS_SOURCES_REFRESHING'
-  //系统UA'0-Android', '1-Phone', '2-电脑', '3-自定义'
-  static readonly SYSTEM_UA:string = 'SYSTEM_UA'
   /**
    * 数据库日志标签
    */
@@ -275,8 +265,4 @@ export default class CommonConstants {
   static readonly COMMON_WIDTH_40: number = 40;
   static readonly COMMON_HEIGHT_40: number = 40;
 
-  /*
-   * 接口请求域名
-   * */
-  static readonly BASE_URL: string = 'https://legado.miaogongzi.cc/api/LegadoServer';
 }

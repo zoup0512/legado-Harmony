@@ -1,9 +1,6 @@
 import { display, promptAction, router } from '@kit.ArkUI';
-import sourceView from './sourceView';
-import DownloadSettingDialog from '../../../componets/Reader/DownloadSettingDialog';
 import LayoutMoreDialog from '../../../componets/Reader/LayoutMoreDialog';
 import { MusicPlayer } from 'ets/componets/Reader/MusicPlayer';
-import purificationView from './purificationView';
 import { bookParser, readerCore, ReadPageComponent } from '@kit.ReaderKit';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -13,7 +10,9 @@ import { Books } from '../../../database/entities/Books';
 import { WindowAbility } from '../../../entryability/WindowAbility';
 import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
 import BrightnessUtil from '../../../../common/utils/BrightnessUtil';
-import fs from '@ohos.file.fs';
+import { requireReadableLocalBookPath } from '../../../common/utils/LocalBookAccess';
+import BooksDao from '../../../database/dao/BooksDao';
+import privacySessionService from '../../../privacy/PrivacySessionService';
 
 interface ParamsObj {
   bookData: Books,
@@ -37,15 +36,12 @@ struct ReaderPage3 {
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @State ReaderPadding: number = 24 // 边距
   @State isShowSetting: boolean = false
-  @State isShowDownload: boolean = false
   @State isShowListen: boolean = false
   @State isShowContentSetting: boolean = false
   @State isShowMoreLayout: boolean = false
   @State isLuminanceFollowSystem: boolean = false //亮度跟随系统
   @State isScreenState: boolean = false //屏幕是否常亮
   @State ParagraphSpacing: number = -2
-  @State isShowSource: boolean = false
-  @State isShowPurification: boolean = false
   //书籍解析用数据
   @State bookData: Books = new Books(); //书籍数据
   @State CatalogList: BasicDataSource<bookParser.CatalogItem> = new BasicDataSource<bookParser.CatalogItem>(); //章节数据
@@ -74,6 +70,19 @@ struct ReaderPage3 {
   private scrollerForList: ListScroller = new ListScroller();
   @State readerLoading: boolean = true
   @State readerError: string = ''
+  @State privacyCovered: boolean = true
+  @State privacyChecking: boolean = true
+  @State privacyBusy: boolean = false
+  @State privacyError: string = ''
+  private privacyRequired: boolean = true;
+  private privacyGeneration: number = -1;
+  private accessRequestId: number = 0;
+  private accessRefreshing: boolean = false;
+  private refreshRequested: boolean = false;
+  private pageActive: boolean = false;
+  private pageReady: boolean = false;
+  private readerStarted: boolean = false;
+  private unsubscribePrivacy: (() => void) | undefined;
   @State themeList: themeItem[] = [
     { fontColor: '#000000', themeColor: '#FFFFFF', themeBgImg: '' },
     { fontColor: '#000000', themeColor: '#c6b6a4', themeBgImg: '' },
@@ -89,6 +98,12 @@ struct ReaderPage3 {
     } else {
       BrightnessUtil.setBrightness('reader', Brightness)
     }
+    this.pageActive = true;
+    this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean) => {
+      if (locked && this.privacyRequired) {
+        this.coverPrivateReader();
+      }
+    });
     this.registerScreenDensityChange();
     this.registerListener();
     //  进入阅读页面后隐藏系统状态栏
@@ -97,6 +112,8 @@ struct ReaderPage3 {
     if (!temp || !temp.bookData) {
       this.readerLoading = false
       this.readerError = '书籍参数无效'
+      this.privacyChecking = false
+      this.privacyError = '书籍参数无效'
       return
     }
     this.bookData = temp.bookData
@@ -113,21 +130,142 @@ struct ReaderPage3 {
     // 进入前同步日/夜模式，避免初始化后再翻转主题造成闪屏；
     // colorModeChange 已有 BookHandler 就绪保护，不会提前调用 setPageConfig
     this.colorMode = this.readerSetting.nightMode ? 0 : 1
-    await this.startPlay(this.bookData.bookUrl ?? '', this.bookData.localBookDurChapterPos?.resourceIndex ?? 0,
-      this.bookData.localBookDurChapterPos?.startDomPos ?? '');
+    this.pageReady = true;
+    await this.refreshReaderAccess();
   }
 
-  private async startPlay(path: string, resourceIndex: number, domPos: string) {
+  onPageShow(): void {
+    this.pageActive = true;
+    if (this.pageReady) {
+      this.refreshReaderAccess();
+    }
+  }
+
+  onPageHide(): void {
+    this.pageActive = false;
+    this.accessRequestId++;
+    if (this.privacyRequired) {
+      this.coverPrivateReader();
+    }
+  }
+
+  private canReadCurrentBook(): boolean {
+    return this.pageActive && !this.privacyCovered && (!this.privacyRequired ||
+      (privacySessionService.isUnlocked() && this.privacyGeneration === privacySessionService.getGeneration()));
+  }
+
+  private releaseReader(): void {
+    this.readerStarted = false;
+    this.BookHandler = null;
+    this.CatalogList.clear();
+    try {
+      this.readerComponentController.releaseBook();
+    } catch (_) {
+    }
+  }
+
+  private coverPrivateReader(): void {
+    this.accessRequestId++;
+    this.privacyCovered = true;
+    this.privacyChecking = false;
+    this.privacyGeneration = -1;
+    this.privacyError = '隐私内容已锁定，请重新解锁';
+    this.isShowSetting = false;
+    this.isShowCatalogDialog = false;
+    this.isShowListen = false;
+    this.releaseReader();
+  }
+
+  private async refreshReaderAccess(): Promise<void> {
+    if (!this.pageReady || !this.pageActive) {
+      return;
+    }
+    if (this.accessRefreshing) {
+      this.refreshRequested = true;
+      return;
+    }
+    this.accessRefreshing = true;
+    this.refreshRequested = false;
+    const requestId = ++this.accessRequestId;
+    const generation = privacySessionService.getGeneration();
+    this.privacyCovered = true;
+    this.privacyChecking = true;
+    this.privacyError = '';
+    this.isShowSetting = false;
+    this.isShowCatalogDialog = false;
+    this.releaseReader();
+    try {
+      const required = await BooksDao.isPrivateBook(this.bookData);
+      if (!this.pageActive || requestId !== this.accessRequestId ||
+        generation !== privacySessionService.getGeneration()) {
+        return;
+      }
+      this.privacyRequired = required;
+      this.privacyGeneration = generation;
+      if (required && !privacySessionService.isUnlocked()) {
+        this.coverPrivateReader();
+        return;
+      }
+      this.privacyCovered = false;
+      if (!this.readerStarted) {
+        await this.startPlay(this.bookData.bookUrl ?? '',
+          this.bookData.localBookDurChapterPos?.resourceIndex ?? 0,
+          this.bookData.localBookDurChapterPos?.startDomPos ?? '', requestId);
+      }
+    } catch (_) {
+      if (requestId === this.accessRequestId) {
+        this.privacyRequired = true;
+        this.privacyCovered = true;
+        this.privacyError = '无法确认书籍访问权限，请返回后重试';
+        this.releaseReader();
+      }
+    } finally {
+      if (requestId === this.accessRequestId) {
+        this.privacyChecking = false;
+      }
+      this.accessRefreshing = false;
+      if (this.refreshRequested && this.pageActive) {
+        this.refreshRequested = false;
+        this.refreshReaderAccess();
+      } else if (this.pageActive && this.privacyCovered) {
+        this.privacyChecking = false;
+        if (!this.privacyError) this.privacyError = '请解锁后继续阅读';
+      }
+    }
+  }
+
+  private async unlockReader(): Promise<void> {
+    if (this.privacyBusy) {
+      return;
+    }
+    this.privacyBusy = true;
+    try {
+      const unlocked = await privacySessionService.unlock(this.getUIContext());
+      if (unlocked && this.pageActive) {
+        await this.refreshReaderAccess();
+      } else if (this.pageActive) {
+        this.privacyError = privacySessionService.getLastFailureMessage() || '请解锁后查看隐私内容';
+      }
+    } finally {
+      this.privacyBusy = false;
+    }
+  }
+
+  private async startPlay(path: string, resourceIndex: number, domPos: string, requestId: number) {
+    if (!this.canReadCurrentBook() || requestId !== this.accessRequestId) {
+      return;
+    }
     this.readerLoading = true
     this.readerError = ''
     try {
-      if (!path || path.startsWith('local://') || !fs.accessSync(path)) {
-        throw new Error('本地书籍文件不存在，请重新下载')
-      }
+      const localPath = requireReadableLocalBookPath(path)
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
       const initPromise: Promise<void> = this.readerComponentController.init(context);
-      const defaultHandler: Promise<bookParser.BookParserHandler> = bookParser.getDefaultHandler(path);
+      const defaultHandler: Promise<bookParser.BookParserHandler> = bookParser.getDefaultHandler(localPath);
       const result: [bookParser.BookParserHandler, void] = await Promise.all([defaultHandler, initPromise]);
+      if (!this.canReadCurrentBook() || requestId !== this.accessRequestId) {
+        return;
+      }
       this.BookHandler = result[0];
       const catalog = this.BookHandler.getCatalogList() || []
       if (catalog.length === 0) {
@@ -139,20 +277,30 @@ struct ReaderPage3 {
       this.bookData.durChapterIndex = safeIndex
       this.readerComponentController.registerBookParser(this.BookHandler);
       this.readerComponentController.setPageConfig(this.readerSetting);
-      this.readerComponentController.startPlay(safeIndex, domPos);
+      this.readerStarted = true;
+      await this.readerComponentController.startPlay(safeIndex, domPos);
+      if (!this.canReadCurrentBook() || requestId !== this.accessRequestId) {
+        if (requestId === this.accessRequestId) this.releaseReader();
+        return;
+      }
       hilog.info(0x0000, 'testTag', 'catalog list length: ' + this.CatalogList.totalCount());
     } catch (err) {
-      const message = err instanceof Error ? err.message : '书籍加载失败'
-      this.readerError = message
-      hilog.error(0x0000, 'testTag', `failed to startPlay: ${message}`);
+      if (this.canReadCurrentBook() && requestId === this.accessRequestId) {
+        this.readerStarted = false;
+        this.readerError = err instanceof Error ? err.message : '书籍加载失败';
+      }
     } finally {
-      if (this.readerError.length > 0) {
-        this.readerLoading = false
-      } else {
-        // 正常路径等 pageShow 首帧回调撤加载层；3 秒兜底防止事件缺失卡在加载页
-        setTimeout(() => {
-          this.readerLoading = false
-        }, 3000)
+      if (this.canReadCurrentBook() && requestId === this.accessRequestId) {
+        if (this.readerError.length > 0) {
+          this.readerLoading = false;
+        } else {
+          // 正常路径等首帧回调；旧请求不能在重锁后撤下遮挡。
+          setTimeout(() => {
+            if (this.canReadCurrentBook() && requestId === this.accessRequestId) {
+              this.readerLoading = false;
+            }
+          }, 3000);
+        }
       }
     }
   }
@@ -192,6 +340,9 @@ struct ReaderPage3 {
 
   private registerListener(): void {
     this.readerComponentController.on('pageShow', (data: readerCore.PageDataInfo): void => {
+      if (!this.canReadCurrentBook()) {
+        return;
+      }
       // 首帧真正渲染完成才撤加载层，避免提前露出未绘制画布造成闪屏
       this.readerLoading = false;
       this.bookData.localBookDurChapterPos = data;
@@ -210,6 +361,9 @@ struct ReaderPage3 {
       PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerSetting)
     });
     WindowAbility.getInstance().onWindowSizeChange(() => {
+      if (!this.canReadCurrentBook() || !this.BookHandler) {
+        return;
+      }
       if (this.readerSetting.viewPortWidth != this.windowWidth ||
         this.readerSetting.viewPortHeight != this.windowHeight) {
         // 当窗口大小更改时，更新当前页面视区大小。
@@ -225,12 +379,17 @@ struct ReaderPage3 {
   }
 
   aboutToDisappear(): void {
+    this.pageActive = false;
+    this.pageReady = false;
+    this.accessRequestId++;
+    this.unsubscribePrivacy?.();
+    this.unsubscribePrivacy = undefined;
     WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());
     PreferencesUtil.putSync(`isScreenState`, this.isScreenState)
     display.off('change', this.screenDensityCallBack);
     this.readerComponentController.off('pageShow');
     this.readerComponentController.off('resourceRequest');
-    this.readerComponentController.releaseBook();
+    this.releaseReader();
   }
 
   build() {
@@ -248,7 +407,9 @@ struct ReaderPage3 {
           }
         }
       }).width('100%').height('100%')
+        .visibility(this.privacyCovered ? Visibility.Hidden : Visibility.Visible)
 
+      if (!this.privacyCovered) {
       if (this.readerLoading || this.readerError.length > 0) {
         Column({ space: 16 }) {
           if (this.readerLoading) {
@@ -297,24 +458,6 @@ struct ReaderPage3 {
                 .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 .fontColor(this.colorMode == 0 ? 'rgba(248, 249, 250, 1)' : 'rgba(19, 19, 19, 1.00)')
 
-              /*Row({ space: 16 }) {
-                Image($r("app.media.refresh")).width(24).onClick(() => {
-
-                })
-                Image($r("app.media.down")).width(24).onClick(() => {
-                  this.isShowDownload = true
-                }).bindSheet($$this.isShowDownload, this.DownloadDialog(), {
-                  height: 500,
-                  showClose: false,
-                  dragBar: false,
-                  blurStyle: BlurStyle.COMPONENT_ULTRA_THIN,
-                  onDisappear: () => { // this.clickBookType = ''
-                  }
-                })
-                Image($r("app.media.more")).width(24).onClick(() => {
-
-                })
-              }*/
             }
             .padding({
               top: 12,
@@ -323,15 +466,6 @@ struct ReaderPage3 {
               bottom: 12
             })
             .width("100%")
-
-            /*            Row() {
-                          NetworkInput()
-                        }.padding({
-                          top: 8,
-                          left: 20,
-                          right: 20,
-                          bottom: 12
-                        }).width("100%")*/
 
             Divider()
           }
@@ -348,58 +482,6 @@ struct ReaderPage3 {
             Divider()
 
             if (!this.isShowContentSetting) {
-              /*Row() {
-                Button({ type: ButtonType.Normal }) {
-                  Row({
-                    space: 4
-                  }) {
-                    Image($r("app.media.change_source_icon")).width(16).height(16)
-                    Text("换源").fontColor($r('app.string.color_black_65')).font({
-                      size: 14, weight: 400
-                    })
-                  }
-                }
-                .borderRadius(8)
-                .height(40)
-                .width("45%")
-                .backgroundColor("rgba(0, 0, 0, 0.06)")
-                .bindSheet($$this.isShowSource, this.sourceView(), {
-                  height: '95%',
-                  showClose: false,
-                  dragBar: false,
-                  maskColor: 'rgba(0,0,0,0.6)',
-                  onDisappear: () => {
-                    console.log('隐藏')
-                  }
-                })
-                .onClick(() => {
-                  this.isShowSource = true
-                })
-
-                Button({ type: ButtonType.Normal }) {
-                  Row({
-                    space: 4
-                  }) {
-                    Image($r("app.media.purify_icon")).width(16).height(16)
-                    Text("净化").fontColor($r('app.string.color_black_65')).font({
-                      size: 14, weight: 400
-                    })
-                  }.bindSheet($$this.isShowPurification, this.purificationView(), {
-                    height: '40%',
-                    showClose: false,
-                    dragBar: false,
-                    maskColor: 'rgba(0,0,0,0.6)',
-                    onDisappear: () => {
-                      console.log('隐藏')
-                    }
-                  }).onClick(() => {
-                    this.isShowPurification = true
-                  })
-                }.borderRadius(8).height(40).width("45%").backgroundColor("rgba(0, 0, 0, 0.06)")
-              }.padding({
-                top: 12, left: 24, right: 24
-              }).justifyContent(FlexAlign.SpaceBetween).width("100%")*/
-
               Row({ space: 16 }) {
                 Text("上一章")
                   .fontColor(this.colorMode == 0 ? 'rgba(248, 249, 250, 1)' : 'rgba(19, 19, 19, 1.00)')
@@ -676,9 +758,29 @@ struct ReaderPage3 {
       }.width("100%").height("100%").enabled(this.isShowSetting).padding({
         top: this.topRectHeight,
       })
+      } else {
+        Column({ space: 18 }) {
+          Text(this.privacyChecking ? '正在确认访问权限…' : '隐私内容已锁定')
+            .fontSize(20).fontWeight(FontWeight.Medium)
+          if (this.privacyChecking) {
+            LoadingProgress().width(36).height(36)
+          } else {
+            Text(this.privacyError || '解锁后继续阅读')
+              .fontSize(14).fontColor('#666666').textAlign(TextAlign.Center)
+            Button(this.privacyBusy ? '认证中…' : '解锁并继续')
+              .enabled(!this.privacyBusy)
+              .onClick(() => this.unlockReader())
+            Button('返回书架').onClick(() => router.back())
+          }
+        }.width('100%').height('100%').padding(32)
+        .justifyContent(FlexAlign.Center)
+        .backgroundColor('#F6F7F9')
+      }
     }.width('100%').height('100%').onClick(() => {
       // 点击拉起菜单栏功能
-      this.isShowSetting = true
+      if (this.canReadCurrentBook()) {
+        this.isShowSetting = true
+      }
     })
   }
 
@@ -775,26 +877,6 @@ struct ReaderPage3 {
   }
 
   @Builder
-  sourceView() {
-    Column() {
-      Column() {
-        Row().width(36).height(4).backgroundColor($r('app.string.color_black_15')).borderRadius(12)
-      }.padding({ top: 12 })
-
-      sourceView()
-    }
-  }
-
-  @Builder
-  purificationView() {
-    Column() {
-      purificationView({
-        isShowPurification: this.isShowPurification
-      })
-    }
-  }
-
-  @Builder
   DialogString() {
     Row() {
       Text("喜欢就加入书架吧").lineHeight(22).font({
@@ -808,15 +890,6 @@ struct ReaderPage3 {
   @Builder
   BookListen() {
     MusicPlayer({ WidthMinus: 118, isShowListen: this.isShowListen }).width("100%").height("100%")
-  }
-
-  @Builder
-  DownloadDialog() {
-    Column() {
-      DownloadSettingDialog({
-        isShowDownload: this.isShowDownload, isShowSetting: this.isShowSetting,
-      })
-    }
   }
 
   @Builder
@@ -853,7 +926,7 @@ struct ReaderPage3 {
    * @param catalogItem 书籍目录节点
    */
   private async jumpToCatalogItem(catalogItem?: bookParser.CatalogItem) {
-    if (!catalogItem) {
+    if (!this.canReadCurrentBook() || !catalogItem) {
       return
     }
     // 根据目录项获取章节的索引
