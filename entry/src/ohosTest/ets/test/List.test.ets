@@ -8,6 +8,7 @@ import pageAccessRefreshTest from './PageAccessRefresh.test'
 import privacyWindowStartupTest from './PrivacyWindowStartup.test'
 import privacyMonotonicClockTest from './PrivacyMonotonicClock.test'
 import privacyOwnershipLookupTest from './PrivacyOwnershipLookup.test'
+import readerFontLogicTest from './ReaderFontLogic.test'
 
 export default function testsuite() {
   abilityTest()
@@ -20,4 +21,5 @@ export default function testsuite() {
   privacyWindowStartupTest()
   privacyMonotonicClockTest()
   privacyOwnershipLookupTest()
+  readerFontLogicTest()
 }

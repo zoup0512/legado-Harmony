@@ -14,6 +14,8 @@ import { requireReadableLocalBookPath } from '../../../common/utils/LocalBookAcc
 import BooksDao from '../../../database/dao/BooksDao';
 import privacySessionService from '../../../privacy/PrivacySessionService';
 import { PageAccessRefresh } from '../../../privacy/PageAccessRefresh';
+import { ReaderFontManager, ReaderFontOption, SYSTEM_FONT_NAME } from '../../../common/utils/ReaderFontManager';
+import { FontPickerPanel } from '../../../componets/Reader/FontPickerPanel';
 
 interface ParamsObj {
   bookData: Books,
@@ -40,6 +42,9 @@ struct ReaderPage3 {
   @State isShowListen: boolean = false
   @State isShowContentSetting: boolean = false
   @State isShowMoreLayout: boolean = false
+  @State isShowFontPicker: boolean = false //字体选择面板
+  @State fontOptions: ReaderFontOption[] = [] //可选字体列表
+  @State isImportingFont: boolean = false //字体导入中
   @State isLuminanceFollowSystem: boolean = false //亮度跟随系统
   @State isScreenState: boolean = false //屏幕是否常亮
   @State ParagraphSpacing: number = -2
@@ -47,6 +52,8 @@ struct ReaderPage3 {
   @State bookData: Books = new Books(); //书籍数据
   @State CatalogList: BasicDataSource<bookParser.CatalogItem> = new BasicDataSource<bookParser.CatalogItem>(); //章节数据
   readerComponentController: readerCore.ReaderComponentController = new readerCore.ReaderComponentController();
+  //资源请求回调是否已注册（仅使用自定义字体时注册，避免干扰图片/CSS 加载）
+  private fontResourceListenerRegistered: boolean = false;
   //阅读器设置
   @State isShowCatalogDialog: boolean = false // 目录弹窗
   @State readerSetting: readerCore.ReaderSetting = {
@@ -126,6 +133,10 @@ struct ReaderPage3 {
     }
     this.readerSetting = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
       this.readerSetting) as readerCore.ReaderSetting;
+    // 上次选择的字体文件可能已被清理：回退系统字体，避免按钮显示一个用不了的字体名
+    this.normalizeRestoredFont();
+    // 必须在 startPlay 排版前注册，否则恢复阅读时首屏拿不到字体字节
+    this.syncFontResourceListener();
     // 进入前同步日/夜模式，避免初始化后再翻转主题造成闪屏；
     // colorModeChange 已有 BookHandler 就绪保护，不会提前调用 setPageConfig
     this.colorMode = this.readerSetting.nightMode ? 0 : 1
@@ -573,9 +584,24 @@ struct ReaderPage3 {
                       this.readerSetting.fontSize = value
                       this.readerComponentController.setPageConfig(this.readerSetting);
                     })
-                  // Row() {
-                  //   Button('字体')
-                  // }
+                  Button(this.readerSetting.fontName === '' || this.readerSetting.fontName === SYSTEM_FONT_NAME
+                    ? '字体' : `字体·${this.readerSetting.fontName}`)
+                    .fontColor(this.colorMode == 0 ? 'rgba(248, 249, 250, 1)' : 'rgba(19, 19, 19, 1.00)')
+                    // 字体名可能很长，限宽省略，避免挤压字号滑块
+                    .constraintSize({ maxWidth: 110 })
+                    .labelStyle({ maxLines: 1, overflow: TextOverflow.Ellipsis })
+                    .onClick(() => {
+                      this.openFontPicker()
+                    })
+                    .bindSheet($$this.isShowFontPicker, this.FontPickerDialog(), {
+                      detents: ['60%'],
+                      dragBar: false,
+                      showClose: false,
+                      onDisappear: () => {
+                        this.isShowFontPicker = false
+                      },
+                      backgroundColor: this.colorMode == 0 ? 'rgba(19, 19, 19, 1.00)' : 'rgba(248, 249, 250, 1)'
+                    })
                 }
 
                 Row({ space: 16 }) {
@@ -892,6 +918,185 @@ struct ReaderPage3 {
   @Builder
   LayoutMoreDialog() {
     LayoutMoreDialog({ ReaderPadding: this.ReaderPadding }).height(500).width("100%")
+  }
+
+  @Builder
+  FontPickerDialog() {
+    FontPickerPanel({
+      fontOptions: this.fontOptions,
+      currentFontPath: this.readerSetting.fontPath,
+      colorMode: this.colorMode,
+      isImporting: this.isImportingFont,
+      onSelect: (option: ReaderFontOption) => {
+        this.selectFont(option)
+        // 收起面板让用户直接看到排版变化
+        this.isShowFontPicker = false
+      },
+      onImport: () => {
+        this.importFontFlow()
+      },
+      onDelete: (option: ReaderFontOption) => {
+        this.deleteFontFlow(option)
+      }
+    }).width('100%').height('100%')
+  }
+
+  private openFontPicker(): void {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    ReaderFontManager.listFontOptions(context).then((options: ReaderFontOption[]) => {
+      this.fontOptions = options
+      this.isShowFontPicker = true
+    }).catch((error: BusinessError) => {
+      hilog.error(0x0000, 'ReaderFont', 'list fonts failed: %{public}s', JSON.stringify(error));
+      promptAction.showToast({ message: '字体加载失败' })
+    })
+  }
+
+  /** 应用所选字体：fontPath 交给内核（配合 resourceRequest 字节流），立即持久化 */
+  private selectFont(option: ReaderFontOption): void {
+    this.readerSetting.fontName = option.name;
+    this.readerSetting.fontPath = option.path;
+    this.syncFontResourceListener();
+    this.readerComponentController.setPageConfig(this.readerSetting);
+    PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerSetting)
+  }
+
+  /**
+   * 按当前设置同步 resourceRequest 监听：
+   * 只有使用自定义字体时才注册，其它情况保持不注册，避免影响内核默认的图片/CSS 加载。
+   */
+  private syncFontResourceListener(): void {
+    const fontPath = this.readerSetting.fontPath;
+    const needFont = !!fontPath && fontPath.length > 0;
+    if (needFont && !this.fontResourceListenerRegistered) {
+      this.readerComponentController.on('resourceRequest', (url: string): ArrayBuffer => {
+        hilog.info(0x0000, 'ReaderFont', 'resourceRequest: %{public}s', url);
+        const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+        return ReaderFontManager.serveFontResource(context, this.readerSetting.fontPath, url);
+      });
+      this.fontResourceListenerRegistered = true;
+    } else if (!needFont && this.fontResourceListenerRegistered) {
+      this.readerComponentController.off('resourceRequest');
+      this.fontResourceListenerRegistered = false;
+    }
+  }
+
+  /** 恢复上次设置时校验字体文件是否还在，失效则回退系统字体 */
+  private normalizeRestoredFont(): void {
+    const path = this.readerSetting.fontPath;
+    if (!path || path.length === 0) {
+      // 旧偏好可能缺字段，统一补成系统字体，后续读取不再判 undefined
+      this.readerSetting.fontName = SYSTEM_FONT_NAME;
+      this.readerSetting.fontPath = '';
+      return;
+    }
+    if (!ReaderFontManager.isFontAvailable(path)) {
+      hilog.warn(0x0000, 'ReaderFont', 'restored font missing: %{public}s, fallback to system', path);
+      this.readerSetting.fontName = SYSTEM_FONT_NAME;
+      this.readerSetting.fontPath = '';
+      return;
+    }
+    // 旧数据可能只有路径没有名字
+    if (!this.readerSetting.fontName || this.readerSetting.fontName.length === 0) {
+      this.readerSetting.fontName = ReaderFontManager.displayNameOf(path);
+    }
+  }
+
+  private importFontFlow(): void {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    this.isImportingFont = true
+    ReaderFontManager.pickFontUris(context).then((uris: string[]) => {
+      if (uris.length === 0) {
+        this.isImportingFont = false
+        return
+      }
+      return this.importFontUris(context, uris)
+    }).catch((error: BusinessError) => {
+      hilog.error(0x0000, 'ReaderFont', 'pick fonts failed: %{public}s', JSON.stringify(error));
+      this.isImportingFont = false
+      promptAction.showToast({ message: '字体导入失败' })
+    })
+  }
+
+  private async importFontUris(context: common.UIAbilityContext, uris: string[]): Promise<void> {
+    let successCount = 0;
+    let failCount = 0;
+    let replacedCurrentFont: ReaderFontOption | undefined;
+    for (let index = 0; index < uris.length; index++) {
+      try {
+        const imported = await ReaderFontManager.importFont(context, uris[index]);
+        if (imported.path === this.readerSetting.fontPath) {
+          replacedCurrentFont = imported;
+        }
+        successCount++;
+      } catch (error) {
+        failCount++;
+        hilog.error(0x0000, 'ReaderFont', 'import font[%{public}d] failed: %{public}s',
+          index, JSON.stringify(error));
+      }
+    }
+    this.isImportingFont = false
+    if (successCount > 0) {
+      try {
+        this.fontOptions = await ReaderFontManager.listFontOptions(context);
+      } catch (error) {
+        hilog.error(0x0000, 'ReaderFont', 'refresh fonts failed: %{public}s', JSON.stringify(error));
+      }
+    }
+    if (replacedCurrentFont && replacedCurrentFont.path === this.readerSetting.fontPath &&
+      this.readerStarted && this.canReadCurrentBook()) {
+      try {
+        // 路径未变也要触发内核重载；中间配置不写入偏好，最终保留用户的字体选择。
+        this.readerComponentController.setPageConfig({
+          fontName: SYSTEM_FONT_NAME,
+          fontPath: '',
+          fontSize: this.readerSetting.fontSize,
+          fontColor: this.readerSetting.fontColor,
+          fontWeight: this.readerSetting.fontWeight,
+          lineHeight: this.readerSetting.lineHeight,
+          nightMode: this.readerSetting.nightMode,
+          themeColor: this.readerSetting.themeColor,
+          themeBgImg: this.readerSetting.themeBgImg,
+          flipMode: this.readerSetting.flipMode,
+          scaledDensity: this.readerSetting.scaledDensity,
+          viewPortWidth: this.readerSetting.viewPortWidth,
+          viewPortHeight: this.readerSetting.viewPortHeight
+        });
+        this.selectFont(replacedCurrentFont);
+      } catch (error) {
+        hilog.error(0x0000, 'ReaderFont', 'reload imported font failed: %{public}s', JSON.stringify(error));
+        promptAction.showToast({ message: '字体已导入，刷新失败，请重新打开书籍' })
+        return
+      }
+    }
+    if (failCount > 0) {
+      promptAction.showToast({ message: `${failCount} 个字体导入失败` })
+    } else if (successCount > 0) {
+      promptAction.showToast({ message: '导入成功' })
+    }
+  }
+
+  private deleteFontFlow(option: ReaderFontOption): void {
+    // 按路径判等：不同扩展名的同名字体（a.ttf / a.otf）展示名相同
+    const wasCurrent = this.readerSetting.fontPath === option.path;
+    if (!ReaderFontManager.deleteFont(option)) {
+      promptAction.showToast({ message: '删除失败' })
+      return
+    }
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    ReaderFontManager.listFontOptions(context).then((options: ReaderFontOption[]) => {
+      this.fontOptions = options
+    }).catch((error: BusinessError) => {
+      hilog.error(0x0000, 'ReaderFont', 'refresh fonts failed: %{public}s', JSON.stringify(error));
+    })
+    if (wasCurrent) {
+      // 删除的是使用中的字体，回退到系统字体
+      const system = new ReaderFontOption();
+      system.name = SYSTEM_FONT_NAME;
+      system.path = '';
+      this.selectFont(system)
+    }
+    promptAction.showToast({ message: '已删除' })
   }
 
   /**

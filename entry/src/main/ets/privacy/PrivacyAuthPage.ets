@@ -236,7 +236,11 @@ export default struct PrivacyAuthPage {
 
   build() {
     Column() {
-      Header({ title: this.title(), customLeftBuilder: this.cancelButton })
+      Header({
+        title: this.title(),
+        // Keep the page receiver when Header invokes its @BuilderParam.
+        customLeftBuilder: () => { this.cancelButton() }
+      })
       Scroll() {
         Column({ space: 20 }) {
           Text(this.title()).fontSize(23).fontWeight(FontWeight.Medium)
