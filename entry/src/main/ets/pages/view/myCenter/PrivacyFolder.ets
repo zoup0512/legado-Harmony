@@ -22,7 +22,8 @@ export default struct PrivacyFolder {
   @State busy: boolean = false;
   @State credentialKnown: boolean = false;
   @State configured: boolean = false;
-  @State biometricEnabled: boolean = false;
+  // Enrolled fingerprint/face: unlock uses system biometrics; otherwise the six-digit PIN.
+  @State biometricReady: boolean = false;
   @State credentialError: string = '';
   @State EXHIBIT: string = '列表';
   @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>();
@@ -33,7 +34,8 @@ export default struct PrivacyFolder {
   private loadRequestId: number = 0;
   private statusRequestId: number = 0;
   private operationId: number = 0;
-  private savedBiometricEnabled: boolean = false;
+  private autoUnlockTried: boolean = false;
+  private autoUnlockTimer: number = -1;
 
   onShelfChanged(): void {
     if (this.unlocked && this.visible) this.loadBooks();
@@ -51,14 +53,30 @@ export default struct PrivacyFolder {
       }
     });
     this.syncSession();
+    this.refreshBiometricReady();
     this.refreshCredentialStatus();
+    // Open the system fingerprint/face prompt once when the page is first entered.
+    if (!this.unlocked && this.biometricReady && !this.autoUnlockTried) {
+      this.autoUnlockTried = true;
+      this.autoUnlockTimer = setTimeout((): void => {
+        this.autoUnlockTimer = -1;
+        if (this.active && this.visible && !this.unlocked) this.unlock();
+      }, 350);
+    }
   }
 
   onPageShow(): void {
     this.visible = true;
     // Never start authentication here: router returns can precede the pending result.
     this.syncSession();
-    if (!this.busy) this.refreshCredentialStatus();
+    if (!this.busy) {
+      this.refreshBiometricReady();
+      this.refreshCredentialStatus();
+    }
+  }
+
+  private refreshBiometricReady(): void {
+    this.biometricReady = privacySessionService.isBiometricAvailable();
   }
 
   onPageHide(): void {
@@ -67,6 +85,8 @@ export default struct PrivacyFolder {
   }
 
   aboutToDisappear(): void {
+    if (this.autoUnlockTimer !== -1) clearTimeout(this.autoUnlockTimer);
+    this.autoUnlockTimer = -1;
     this.active = false;
     this.visible = false;
     this.statusRequestId++;
@@ -85,8 +105,6 @@ export default struct PrivacyFolder {
   private clearLockedState(): void {
     this.unlocked = false;
     this.searchKey = '';
-    this.biometricEnabled = false;
-    this.savedBiometricEnabled = false;
     this.operationId++;
     this.busy = false;
     this.clearBooks();
@@ -110,8 +128,6 @@ export default struct PrivacyFolder {
       if (!this.active || requestId !== this.statusRequestId ||
         generation !== privacySessionService.getGeneration()) return;
       this.configured = status.configured;
-      this.savedBiometricEnabled = status.biometricEnabled;
-      this.biometricEnabled = status.biometricEnabled;
       this.credentialKnown = true;
       this.credentialError = '';
     } catch (_) {
@@ -135,6 +151,7 @@ export default struct PrivacyFolder {
     const operationId = ++this.operationId;
     const generation = privacySessionService.getGeneration();
     this.busy = true;
+    this.refreshBiometricReady();
     try {
       const success = await privacySessionService.unlock(this.getUIContext());
       if (!this.active || operationId !== this.operationId) return;
@@ -144,51 +161,6 @@ export default struct PrivacyFolder {
       } else if (this.visible) {
         promptAction.showToast({ message: privacySessionService.getLastFailureMessage() || '已取消隐私认证' });
       }
-    } finally {
-      if (this.active && operationId === this.operationId) this.busy = false;
-    }
-  }
-
-  private async changePin(): Promise<void> {
-    if (this.busy || privacySessionService.isAuthenticating() || !privacySessionService.isUnlocked()) return;
-    const operationId = ++this.operationId;
-    const generation = privacySessionService.getGeneration();
-    this.busy = true;
-    try {
-      const success = await privacySessionService.changePin(this.getUIContext());
-      if (!this.active || operationId !== this.operationId || generation !== privacySessionService.getGeneration()) return;
-      if (this.visible) {
-        promptAction.showToast({ message: success ? '隐私密码已更新' :
-          privacySessionService.getLastFailureMessage() || '未修改隐私密码' });
-      }
-      await this.refreshCredentialStatus();
-    } finally {
-      if (this.active && operationId === this.operationId) this.busy = false;
-    }
-  }
-
-  private async setBiometricEnabled(enabled: boolean): Promise<void> {
-    if (this.busy || privacySessionService.isAuthenticating() || !privacySessionService.isUnlocked()) {
-      this.biometricEnabled = this.savedBiometricEnabled;
-      return;
-    }
-    if (enabled === this.savedBiometricEnabled) return;
-    const previous = this.savedBiometricEnabled;
-    const operationId = ++this.operationId;
-    const generation = privacySessionService.getGeneration();
-    this.biometricEnabled = enabled;
-    this.busy = true;
-    try {
-      const success = await privacySessionService.setBiometricEnabled(this.getUIContext(), enabled);
-      if (!this.active || operationId !== this.operationId || generation !== privacySessionService.getGeneration()) return;
-      // Failed/cancelled authentication must not leave an optimistic switch enabled.
-      this.biometricEnabled = success ? enabled : previous;
-      if (success) this.savedBiometricEnabled = enabled;
-      if (this.visible) {
-        promptAction.showToast({ message: success ? (enabled ? '已开启快捷生物认证' : '已关闭快捷生物认证') :
-          privacySessionService.getLastFailureMessage() || '未更改生物认证设置' });
-      }
-      await this.refreshCredentialStatus();
     } finally {
       if (this.active && operationId === this.operationId) this.busy = false;
     }
@@ -213,14 +185,17 @@ export default struct PrivacyFolder {
     }
   }
 
-  lock(): void {
-    privacySessionService.lock();
-  }
-
   private unlockLabel(): string {
     if (this.busy) return '认证中…';
+    if (this.biometricReady) return '指纹 / 人脸解锁';
     if (!this.credentialKnown) return '读取凭据中…';
     return this.configured ? '输入密码解锁' : '设置六位隐私密码';
+  }
+
+  private lockedHint(): string {
+    if (this.biometricReady) return '使用指纹或人脸验证后查看私密书籍';
+    if (this.credentialKnown && !this.configured) return '设备未录入指纹或人脸，请设置六位隐私密码';
+    return '解锁后查看你的私密书籍与文稿';
   }
 
   build() {
@@ -230,44 +205,29 @@ export default struct PrivacyFolder {
         Column({ space: 18 }) {
           Image($r('sys.symbol.lock')).width(56).height(56).fillColor(this.theme.mainColor)
           Text('私人阅读，独立保存').fontSize(20).fontWeight(FontWeight.Medium)
-          Text(this.credentialKnown && !this.configured ? '首次使用请设置六位数字隐私密码' : '解锁后查看你的私密书籍与文稿')
+          Text(this.lockedHint())
             .fontSize(14).fontColor('#777777')
           Column({ space: 6 }) {
-            Text('· 六位独立密码，指纹 / 人脸可选开启').fontSize(13).fontColor('#555555')
+            Text('· 优先使用指纹 / 人脸，未录入时使用六位密码').fontSize(13).fontColor('#555555')
             Text('· 离开应用即自动上锁').fontSize(13).fontColor('#555555')
             Text('· 不出现在普通书架中').fontSize(13).fontColor('#555555')
           }.alignItems(HorizontalAlign.Start)
-          if (this.credentialKnown && !this.configured) {
+          if (!this.biometricReady && this.credentialKnown && !this.configured) {
             Text('如有旧隐私书，需先验证原指纹或人脸；不可用时保留数据，不能直接接管。')
               .fontSize(12).fontColor('#777777').textAlign(TextAlign.Center)
           }
-          if (this.credentialError.length > 0) {
+          if (!this.biometricReady && this.credentialError.length > 0) {
             Text(this.credentialError).fontSize(13).fontColor('#B84A36').textAlign(TextAlign.Center)
             Button('重新读取凭据').onClick((): void => { this.refreshCredentialStatus(); })
           } else {
             Button(this.unlockLabel()).width('80%').backgroundColor(this.theme.mainColor)
-              .enabled(!this.busy && this.credentialKnown).onClick((): void => { this.unlock(); })
+              .enabled(!this.busy && (this.biometricReady || this.credentialKnown))
+              .onClick((): void => { this.unlock(); })
           }
           Text('仅保护应用内副本，系统目录中的原文件不会被删除')
             .fontSize(12).fontColor('#999999').textAlign(TextAlign.Center)
         }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
       } else {
-        Row({ space: 12 }) {
-          Button('修改密码').fontSize(13).enabled(!this.busy)
-            .onClick((): void => { this.changePin(); })
-          Blank()
-          Button('立即上锁').fontSize(13).onClick((): void => this.lock())
-        }.width('100%')
-        Row({ space: 12 }) {
-          Column({ space: 4 }) {
-            Text('快捷生物认证').fontSize(14)
-            Text('开启需密码和系统认证，关闭也需密码').fontSize(11).fontColor('#777777')
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.biometricEnabled })
-            .enabled(!this.busy && this.credentialKnown)
-            .selectedColor(this.theme.mainColor)
-            .onChange((enabled: boolean): void => { this.setBiometricEnabled(enabled); })
-        }.width('100%')
         Search({ value: this.searchKey, placeholder: '搜索私密书籍' })
           .onChange((value: string): void => { this.searchKey = value; this.loadBooks(); })
         Row({ space: 18 }) {
@@ -286,7 +246,6 @@ export default struct PrivacyFolder {
         if (this.books.length === 0) {
           Column({ space: 12 }) {
             Text('暂无私密书籍').fontColor('#888888')
-            Button('导入本地书籍').onClick((): void => this.openImport())
           }.layoutWeight(1).margin({ top: 40 })
         } else {
           List({ space: 10 }) {

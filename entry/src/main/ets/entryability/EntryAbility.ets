@@ -15,6 +15,7 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import BrightnessUtil from '../../common/utils/BrightnessUtil';
 import privacySessionService from '../privacy/PrivacySessionService';
 import privacyCredentialService from '../privacy/PrivacyCredentialService';
+import privacyForeground from '../privacy/PrivacyForeground';
 
 export default class EntryAbility extends UIAbility {
   private curBp: string = ''
@@ -174,6 +175,7 @@ export default class EntryAbility extends UIAbility {
 
   onWindowStageDestroy() {
     this.windowStage = undefined;
+    privacyForeground.leave();
     privacySessionService.lock();
     // Main window is destroyed, release UI related resources
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageDestroy');
@@ -182,10 +184,12 @@ export default class EntryAbility extends UIAbility {
   onForeground() {
     // Privacy sessions never survive a background transition.
     privacySessionService.lock();
+    privacyForeground.enter();
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onForeground');
   }
 
   onBackground() {
+    privacyForeground.leave();
     privacySessionService.lock();
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onBackground');
   }

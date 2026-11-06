@@ -7,7 +7,7 @@ import { BooksTypeSearchParams } from '../types/BooksType';
 import { ColumnInfo } from '../types/ColumnInfo';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
 import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants';
-import { PrivacyBookIdentity, PrivacyOwnershipLookup } from '../../privacy/PrivacyOwnershipLookup';
+import { checkPrivateBook, PrivacyBookIdentity, PrivacyOwnershipLookup } from '../../privacy/PrivacyOwnershipLookup';
 
 // Leave room for the group predicate below SQLite's bind-parameter limit.
 const PRIVACY_ID_QUERY_CHUNK_SIZE: number = 500;
@@ -34,10 +34,8 @@ class BooksDao {
   }
 
   async isPrivateBook(book: Books): Promise<boolean> {
-    if (book.bookGroup === PRIVACY_BOOK_GROUP) return true;
-    return (await this.loadPrivacyOwnership()).isPrivateBook({
-      id: book.id, bookUrl: book.bookUrl, bookGroup: book.bookGroup
-    });
+    return checkPrivateBook({ id: book.id, bookUrl: book.bookUrl, bookGroup: book.bookGroup },
+      (): Promise<PrivacyOwnershipLookup> => this.loadPrivacyOwnership());
   }
 
   // Direct persisted IDs only: unlike book/history checks, this does not expand path aliases.

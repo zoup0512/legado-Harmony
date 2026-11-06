@@ -138,13 +138,13 @@ export class PrivacySessionService {
 
   private failureMessage(resultCode: number): string {
     if (resultCode === 0) return '系统认证未能启动，可能已被临时锁定，请锁屏解锁后重试';
-    if (resultCode === userAuth.UserAuthResultCode.CANCELED) return '已取消系统认证，可返回使用隐私密码';
-    if (resultCode === userAuth.UserAuthResultCode.LOCKED) return '系统认证已被锁定，可使用隐私密码或稍后重试';
-    if (resultCode === userAuth.UserAuthResultCode.NOT_ENROLLED) return '未录入指纹或人脸，可使用隐私密码';
+    if (resultCode === userAuth.UserAuthResultCode.CANCELED) return '已取消系统认证';
+    if (resultCode === userAuth.UserAuthResultCode.LOCKED) return '系统认证已被锁定，请稍后重试';
+    if (resultCode === userAuth.UserAuthResultCode.NOT_ENROLLED) return '未录入指纹或人脸';
     if (resultCode === userAuth.UserAuthResultCode.TYPE_NOT_SUPPORT) return '设备不支持该认证方式';
     if (resultCode === userAuth.UserAuthResultCode.TRUST_LEVEL_NOT_SUPPORT) return '设备不支持当前认证安全等级';
     if (resultCode === userAuth.UserAuthResultCode.BUSY) return '系统认证服务繁忙，请稍后重试';
-    return '系统认证失败，可使用隐私密码或重试';
+    return '系统认证失败，请重试';
   }
 
   // Widget success is 12500000, never the stray 0 emitted by some devices.
@@ -221,9 +221,48 @@ export class PrivacySessionService {
     }
   }
 
+  // True when the device has an enrolled fingerprint or face usable at ATL2.
+  isBiometricAvailable(): boolean {
+    return this.isTypeAvailable(userAuth.UserAuthType.FINGERPRINT) ||
+      this.isTypeAvailable(userAuth.UserAuthType.FACE);
+  }
+
+  // Biometrics are the default; the six-digit PIN is only used when none are enrolled.
   async unlock(uiContext?: UIContext): Promise<boolean> {
     if (this.isUnlocked()) return true;
+    if (this.isBiometricAvailable()) return this.requestBiometricUnlock();
     return this.requestAuthentication(PrivacyAuthMode.UNLOCK, uiContext);
+  }
+
+  private requestBiometricUnlock(): Promise<boolean> {
+    if (this.authenticating) return Promise.resolve(false);
+    this.authenticating = true;
+    this.lastFailureMessage = '';
+    const request = new PrivacyAuthRequest();
+    request.requestId = ++this.nextRequestId;
+    request.generation = this.generation;
+    request.mode = PrivacyAuthMode.UNLOCK;
+    request.ready = true;
+    request.operating = true;
+    this.request = request;
+    return new Promise<boolean>((resolve) => {
+      request.resolve = resolve;
+      this.runBiometricUnlock(request);
+    });
+  }
+
+  private async runBiometricUnlock(request: PrivacyAuthRequest): Promise<void> {
+    let success = false;
+    try {
+      success = await this.runSystemAuthentication(request);
+    } catch (_) {
+      if (this.isCurrent(request)) this.lastFailureMessage = '系统认证失败，请重试';
+      success = false;
+    }
+    request.operating = false;
+    if (!this.isCurrent(request)) return;
+    request.approved = success;
+    this.settleRequest(request, success);
   }
 
   async changePin(uiContext: UIContext): Promise<boolean> {

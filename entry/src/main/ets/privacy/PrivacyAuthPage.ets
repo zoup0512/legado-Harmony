@@ -6,6 +6,7 @@ import privacySessionService, {
   PrivacyAuthMode, PrivacyAuthRequestInfo, PrivacyAuthStage, PrivacyBiometricPurpose
 } from './PrivacySessionService';
 import { PrivacyMonotonicClock } from './PrivacyMonotonicClock';
+import { PrivacyPinPad } from './PrivacyPinPad';
 
 @Entry
 @Component
@@ -17,6 +18,8 @@ export default struct PrivacyAuthPage {
   @State info: PrivacyAuthRequestInfo = new PrivacyAuthRequestInfo();
   @State pin: string = '';
   @State confirmation: string = '';
+  // Setting a new PIN: false while entering it, true while re-entering it to confirm.
+  @State confirming: boolean = false;
   @State errorMessage: string = '';
   @State busy: boolean = false;
   @State ready: boolean = false;
@@ -83,6 +86,56 @@ export default struct PrivacyAuthPage {
   private clearInputs(): void {
     this.pin = '';
     this.confirmation = '';
+    this.confirming = false;
+  }
+
+  private canType(): boolean {
+    return this.isCurrent() && !this.busy && this.retrySeconds === 0;
+  }
+
+  private onDigit(digit: string): void {
+    if (!this.canType() || !/^[0-9]$/.test(digit)) return;
+    this.errorMessage = '';
+    if (this.confirming) {
+      if (this.confirmation.length >= 6) return;
+      this.confirmation += digit;
+      if (this.confirmation.length === 6) {
+        if (this.confirmation !== this.pin) {
+          this.clearInputs();
+          this.errorMessage = '两次输入的密码不一致，请重新设置';
+          return;
+        }
+        this.submitPin();
+      }
+      return;
+    }
+    if (this.pin.length >= 6) return;
+    this.pin += digit;
+    if (this.pin.length === 6) {
+      if (this.needsConfirmation()) {
+        this.confirming = true;
+      } else {
+        this.submitPin();
+      }
+    }
+  }
+
+  private onDelete(): void {
+    if (!this.canType()) return;
+    if (this.confirming) {
+      this.confirmation = this.confirmation.slice(0, -1);
+    } else {
+      this.pin = this.pin.slice(0, -1);
+    }
+  }
+
+  private promptText(): string {
+    if (this.needsConfirmation()) {
+      if (this.confirming) return '请再次输入以确认';
+      return this.info.stage === PrivacyAuthStage.SETUP_PIN ? '请设置六位隐私密码' : '请输入新的六位隐私密码';
+    }
+    if (this.mode === PrivacyAuthMode.UNLOCK) return '请输入隐私密码';
+    return '请输入当前隐私密码';
   }
 
   private stopRetryTimer(): void {
@@ -210,21 +263,6 @@ export default struct PrivacyAuthPage {
     return '解锁隐私文件夹';
   }
 
-  private pinPlaceholder(): string {
-    if (this.needsConfirmation()) return '输入六位新密码';
-    if (this.mode === PrivacyAuthMode.CHANGE_PIN) return '输入六位旧密码';
-    return '输入六位隐私密码';
-  }
-
-  private submitLabel(): string {
-    if (this.busy) return '验证中…';
-    if (this.info.stage === PrivacyAuthStage.SETUP_PIN) return '设置密码并解锁';
-    if (this.info.stage === PrivacyAuthStage.REPLACE_PIN) return '保存新密码';
-    if (this.mode === PrivacyAuthMode.UNLOCK) return '解锁';
-    if (this.mode === PrivacyAuthMode.DISABLE_BIOMETRIC) return '验证密码并关闭';
-    return '验证当前密码';
-  }
-
   @Builder
   cancelButton() {
     Text('取消')
@@ -262,76 +300,33 @@ export default struct PrivacyAuthPage {
               Button('返回密码验证').width('100%').enabled(!this.busy)
                 .onClick((): void => this.returnToPin())
             } else {
-              if (this.needsConfirmation()) {
-                Text('使用六位数字，两次输入需一致。密码不会通过页面路由传递，快捷生物认证默认关闭。')
-                  .fontSize(14).fontColor('#777777')
-              } else if (this.mode === PrivacyAuthMode.UNLOCK) {
-                Text('请输入六位数字隐私密码').fontSize(15).fontColor('#555555')
-              } else {
-                Text('即使隐私会话已解锁，此操作仍需重新验证当前密码。')
-                  .fontSize(14).fontColor('#777777')
-              }
-              TextInput({ text: this.pin, placeholder: this.pinPlaceholder() })
-                .type(InputType.NUMBER_PASSWORD)
-                .showPasswordIcon(false)
-                .maxLength(6)
-                .inputFilter('[0-9]*')
-                .copyOption(CopyOptions.None)
-                .height(52)
-                .enabled(!this.busy)
-                .onChange((value: string): void => { this.pin = value.replace(/[^0-9]/g, '').slice(0, 6); })
-              if (this.needsConfirmation()) {
-                TextInput({ text: this.confirmation, placeholder: '再次输入六位新密码' })
-                  .type(InputType.NUMBER_PASSWORD)
-                  .showPasswordIcon(false)
-                  .maxLength(6)
-                  .inputFilter('[0-9]*')
-                  .copyOption(CopyOptions.None)
-                  .height(52)
-                  .enabled(!this.busy)
-                  .onChange((value: string): void => {
-                    this.confirmation = value.replace(/[^0-9]/g, '').slice(0, 6);
-                  })
-              }
-              if (this.retrySeconds > 0) {
-                Text(`密码尝试过多，请在 ${this.retrySeconds} 秒后重试`)
-                  .fontSize(14).fontColor('#B84A36')
-              }
-              Button(this.submitLabel())
-                .width('100%').backgroundColor(this.theme.mainColor)
-                .enabled(!this.busy && this.retrySeconds === 0 && this.pin.length === 6 &&
-                  (!this.needsConfirmation() || this.confirmation.length === 6))
-                .onClick((): void => { this.submitPin(); })
-              if (this.info.stage === PrivacyAuthStage.VERIFY_PIN && this.info.biometricEnabled &&
-                this.mode === PrivacyAuthMode.UNLOCK) {
-                Button(this.busy ? '系统认证中…' : '使用指纹 / 人脸解锁')
-                  .width('100%').enabled(!this.busy)
-                  .onClick((): void => { this.authenticate(PrivacyBiometricPurpose.UNLOCK); })
-              }
-              if (this.info.stage === PrivacyAuthStage.VERIFY_PIN && this.info.biometricEnabled &&
-                (this.mode === PrivacyAuthMode.UNLOCK || this.mode === PrivacyAuthMode.CHANGE_PIN)) {
-                Button('忘记密码？通过系统认证重设')
-                  .width('100%').enabled(!this.busy)
-                  .onClick((): void => { this.authenticate(PrivacyBiometricPurpose.RESET_PIN); })
-                Text('重设必须重新完成系统认证，已解锁会话不能代替本次验证。')
-                  .fontSize(12).fontColor('#777777')
-              } else if (this.info.stage === PrivacyAuthStage.VERIFY_PIN && !this.info.biometricEnabled) {
-                Text('未预先开启快捷生物认证时，忘记密码无法绕过验证；不会删除或接管原有书籍。')
-                  .fontSize(12).fontColor('#777777')
-              }
+              Text(this.promptText()).fontSize(17).fontColor('#333333').margin({ top: 12 })
+              Text(this.retrySeconds > 0 ? `密码尝试过多，请在 ${this.retrySeconds} 秒后重试` :
+                (this.busy ? '验证中…' : this.errorMessage))
+                .fontSize(14)
+                .fontColor(this.busy && this.retrySeconds === 0 ? '#777777' : '#B84A36')
+                .height(20)
+                .textAlign(TextAlign.Center)
+              PrivacyPinPad({
+                filled: this.confirming ? this.confirmation.length : this.pin.length,
+                inputEnabled: !this.busy && this.retrySeconds === 0,
+                accentColor: this.theme.mainColor,
+                onDigit: (digit: string): void => this.onDigit(digit),
+                onDelete: (): void => this.onDelete()
+              })
               if (this.info.stage === PrivacyAuthStage.REPLACE_PIN) {
                 Button('返回密码验证').width('100%').enabled(!this.busy)
                   .onClick((): void => this.returnToPin())
               }
             }
           }
-          if (this.errorMessage.length > 0) {
+          if (this.errorMessage.length > 0 && (this.info.stage === PrivacyAuthStage.LEGACY_PROOF ||
+            this.info.stage === PrivacyAuthStage.ENABLE_BIOMETRIC)) {
             Text(this.errorMessage).fontSize(14).fontColor('#B84A36').textAlign(TextAlign.Center)
           }
-          Text('离开此页、切换应用或取消时会清空输入并终止本次认证。')
-            .fontSize(12).fontColor('#999999').textAlign(TextAlign.Center)
         }
         .width('100%')
+        .alignItems(HorizontalAlign.Center)
         .padding({ left: 28, right: 28, top: 28, bottom: 24 })
       }
       .layoutWeight(1)

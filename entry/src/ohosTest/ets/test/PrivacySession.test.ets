@@ -125,7 +125,12 @@ class SessionWithFakeBiometrics extends PrivacySessionService {
   nativeGate: SessionTestGate | undefined;
   onNative: (() => void) | undefined;
 
+  // Unlock routing: false keeps the PIN-page path; true takes the biometric-first path.
+  enrolledForUnlock: boolean = false;
+
   protected isTypeAvailable(_type: userAuth.UserAuthType): boolean { return this.available; }
+
+  isBiometricAvailable(): boolean { return this.enrolledForUnlock && this.available; }
 
   protected async runAuthOnce(_types: userAuth.UserAuthType[]): Promise<number> {
     this.nativeCalls++;
@@ -164,6 +169,40 @@ class SessionFixture {
 
 export default function privacySessionTest() {
   describe('PrivacySessionTest', () => {
+    it('enrolledBiometricsUnlockDirectlyWithoutPinPage', 0, async () => {
+      const f = new SessionFixture(false);
+      f.service.enrolledForUnlock = true;
+      expect(await f.service.unlock()).assertTrue();
+      expect(f.service.nativeCalls).assertEqual(1);
+      expect(f.page.openCalls).assertEqual(0);
+      expect(f.credentials.setupCalls).assertEqual(0);
+      expect(f.service.isUnlocked()).assertTrue();
+      expect(f.service.isAuthenticating()).assertFalse();
+    });
+
+    it('failedBiometricUnlockStaysLockedAndDoesNotFallBackToPin', 0, async () => {
+      const f = new SessionFixture();
+      f.service.enrolledForUnlock = true;
+      f.service.results = [userAuth.UserAuthResultCode.CANCELED];
+      expect(await f.service.unlock()).assertFalse();
+      expect(f.page.openCalls).assertEqual(0);
+      expect(f.service.isUnlocked()).assertFalse();
+      expect(f.service.isAuthenticating()).assertFalse();
+    });
+
+    it('lockDuringBiometricUnlockSettlesFalse', 0, async () => {
+      const f = new SessionFixture();
+      f.service.enrolledForUnlock = true;
+      const gate = new SessionTestGate();
+      f.service.nativeGate = gate;
+      const result = f.service.unlock();
+      await Promise.resolve();
+      f.service.lock();
+      gate.open();
+      expect(await result).assertFalse();
+      expect(f.service.isUnlocked()).assertFalse();
+    });
+
     it('usesMaskedPageRequestAndPreservesLeadingZeroWithoutAutomaticBiometrics', 0, async () => {
       const f = new SessionFixture();
       const result = f.service.unlock();

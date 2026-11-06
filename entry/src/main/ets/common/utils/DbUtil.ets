@@ -165,19 +165,18 @@ class DbUtil {
    * @param columns
    * @returns
    */
-  querySqlForList<T> (sql: string, columns: ColumnInfo[]): Promise<T[]> {
-    return new Promise((resolve, reject) => {
-      this.rdbStore?.querySql(sql, (err, result) => {
-        if (err) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'查询失败!',JSON.stringify(err));
-          reject(err);
-        } else {
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
-          resolve(this.parseResultSet(result, columns));
-          result.close();
-        }
-      })
-    });
+  async querySqlForList<T> (sql: string, columns: ColumnInfo[]): Promise<T[]> {
+    const rdbStore = this.rdbStore;
+    if (rdbStore === undefined) {
+      throw new Error('rdbStore 未初始化');
+    }
+    const result = await rdbStore.querySql(sql);
+    try {
+      Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
+      return this.parseResultSet<T>(result, columns);
+    } finally {
+      result.close();
+    }
   }
   /**
    * 查询数据
@@ -185,19 +184,18 @@ class DbUtil {
    * @param columns
    * @returns
    */
-  queryForList<T> (predicates: relationalStore.RdbPredicates, columns: ColumnInfo[]): Promise<T[]> {
-    return new Promise((resolve, reject) => {
-      this.rdbStore?.query(predicates, columns.map(info => info.columnName), (err, result) => {
-        if (err) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'查询失败!',JSON.stringify(err));
-          reject(err);
-        } else {
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
-          resolve(this.parseResultSet(result, columns));
-          result.close();
-        }
-      })
-    });
+  async queryForList<T> (predicates: relationalStore.RdbPredicates, columns: ColumnInfo[]): Promise<T[]> {
+    const rdbStore = this.rdbStore;
+    if (rdbStore === undefined) {
+      throw new Error('rdbStore 未初始化');
+    }
+    const result = await rdbStore.query(predicates, columns.map(info => info.columnName));
+    try {
+      Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
+      return this.parseResultSet<T>(result, columns);
+    } finally {
+      result.close();
+    }
   }
   /**
    * 查询数据个数

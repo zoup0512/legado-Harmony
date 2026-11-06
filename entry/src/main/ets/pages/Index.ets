@@ -27,6 +27,11 @@ struct Main {
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
 
   onPageShow(): void {
+    if (AppStorage.get<boolean>('RETURN_TO_BOOKSHELF')) {
+      AppStorage.setOrCreate('RETURN_TO_BOOKSHELF', false)
+      this.currentTabIndex = 0
+      this.tabController.changeIndex(0)
+    }
     // 退出阅读页面后恢复系统亮度
     BrightnessUtil.setBrightness('default', -1)
     // 退出阅读页面后显示状态栏

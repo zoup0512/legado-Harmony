@@ -9,6 +9,12 @@ import privacyWindowStartupTest from './PrivacyWindowStartup.test'
 import privacyMonotonicClockTest from './PrivacyMonotonicClock.test'
 import privacyOwnershipLookupTest from './PrivacyOwnershipLookup.test'
 import readerFontLogicTest from './ReaderFontLogic.test'
+import readerProgressTest from './ReaderProgress.test'
+import readerLoadScopeTest from './ReaderLoadScope.test'
+import bookAccessCheckTest from './BookAccessCheck.test'
+import bookAccessStateTest from './BookAccessState.test'
+import privateBookAutoUnlockTest from './PrivateBookAutoUnlock.test'
+import dbUtilQueryTest from './DbUtilQuery.test'
 
 export default function testsuite() {
   abilityTest()
@@ -22,4 +28,10 @@ export default function testsuite() {
   privacyMonotonicClockTest()
   privacyOwnershipLookupTest()
   readerFontLogicTest()
+  readerProgressTest()
+  readerLoadScopeTest()
+  bookAccessCheckTest()
+  bookAccessStateTest()
+  privateBookAutoUnlockTest()
+  dbUtilQueryTest()
 }

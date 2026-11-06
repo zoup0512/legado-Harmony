@@ -36,6 +36,44 @@ export class PrivacyOwnershipLookup {
   }
 }
 
+/** Bound the read-only lookup, never treat a failed or timed-out lookup as public. */
+export function checkPrivateBook(book: PrivacyBookIdentity,
+  loadOwnership: () => Promise<PrivacyOwnershipLookup>, timeoutMs: number = 10000): Promise<boolean> {
+  if (book.bookGroup === PRIVACY_BOOK_GROUP) return Promise.resolve(true);
+  return new Promise<boolean>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Privacy ownership lookup timed out'));
+    }, timeoutMs);
+    try {
+      loadOwnership().then((ownership: PrivacyOwnershipLookup) => {
+        if (settled) return;
+        try {
+          const required = ownership.isPrivateBook(book);
+          settled = true;
+          clearTimeout(timer);
+          resolve(required);
+        } catch (error) {
+          settled = true;
+          clearTimeout(timer);
+          reject(error);
+        }
+      }, (error: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+    } catch (error) {
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    }
+  });
+}
+
 /** Load once, filter synchronously, then reject results from a changed generation.
  * Lookup failures propagate: an unknown owner must never be classified as public.
  */

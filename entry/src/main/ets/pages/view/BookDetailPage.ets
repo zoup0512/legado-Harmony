@@ -16,6 +16,10 @@ import {
 import BooksDao from '../../database/dao/BooksDao'
 import privacySessionService from '../../privacy/PrivacySessionService'
 import { PageAccessRefresh } from '../../privacy/PageAccessRefresh'
+import { BookAccessState, BookOwnership } from '../../privacy/BookAccessState'
+import privacyForeground from '../../privacy/PrivacyForeground'
+import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../privacy/PrivateBookAutoUnlock'
+import { hilog } from '@kit.PerformanceAnalysisKit'
 
 /**
  * 标题图片样式
@@ -59,14 +63,17 @@ struct BookDetailPage {
   @State privacyCovered: boolean = true
   @State privacyChecking: boolean = true
   @State privacyBusy: boolean = false
+  @State resumeAuthPending: boolean = false
   @State privacyError: string = ''
-  private privacyRequired: boolean = true
+  @State accessFailed: boolean = false
+  @State ownership: BookOwnership = BookOwnership.UNKNOWN
   private privacyGeneration: number = -1
   private accessRefresh: PageAccessRefresh = new PageAccessRefresh()
   private pageActive: boolean = false
   private pageReady: boolean = false
   private catalogReady: boolean = false
   private unsubscribePrivacy: (() => void) | undefined
+  private autoUnlock?: PrivateBookAutoUnlock
   // 加入书架dialog
   dialogController: CustomDialogController = new CustomDialogController({
     builder: AddBookShelfDialog(),
@@ -82,40 +89,66 @@ struct BookDetailPage {
 
   onPageShow() {
     this.pageActive = true
+    this.logAccessLifecycle('show')
     if (this.pageReady) {
       this.refreshDetailAccess()
     }
+    this.autoUnlock?.reconcile()
   }
 
   onPageHide() {
     this.pageActive = false
-    this.accessRefresh.invalidate()
-    this.isShow = false
-    if (this.privacyRequired) {
-      this.coverPrivateDetail()
-    }
+    this.invalidateDetailAccess(true)
+    this.autoUnlock?.reconcile()
+    this.logAccessLifecycle('hide')
   }
 
   aboutToDisappear() {
     this.pageActive = false
     this.pageReady = false
-    this.accessRefresh.invalidate()
+    this.autoUnlock?.dispose()
+    this.autoUnlock = undefined
+    this.invalidateDetailAccess(true)
     this.unsubscribePrivacy?.()
     this.unsubscribePrivacy = undefined
+    this.logAccessLifecycle('disappear')
   }
 
   async aboutToAppear() {
     this.pageActive = true
     this.isShow = false
+    this.logAccessLifecycle('appear')
+    this.autoUnlock = new PrivateBookAutoUnlock(privacyForeground, {
+      snapshot: (): PrivateBookUnlockSnapshot => ({
+        active: this.pageActive,
+        ready: this.pageReady,
+        ownership: this.ownership,
+        failed: this.accessFailed,
+        unlocked: privacySessionService.isUnlocked(),
+        authenticating: this.privacyBusy || privacySessionService.isAuthenticating(),
+        generation: privacySessionService.getGeneration()
+      }),
+      unlock: (): Promise<boolean> => this.unlockDetail(),
+      restored: (): Promise<void> => this.refreshDetailAccess(),
+      returnToShelf: (): void => {
+        AppStorage.setOrCreate('RETURN_TO_BOOKSHELF', true)
+        router.back({ url: 'pages/Index' })
+      },
+      pendingChanged: (pending: boolean): void => { this.resumeAuthPending = pending }
+    })
     this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean) => {
-      if (locked && this.privacyRequired) {
-        this.coverPrivateDetail()
+      this.invalidateDetailAccess(locked)
+      this.logAccessLifecycle('session')
+      if (this.pageActive && this.pageReady && (!locked || this.ownership !== BookOwnership.PRIVATE)) {
+        this.refreshDetailAccess()
       }
+      this.autoUnlock?.reconcile()
     })
     const params = router.getParams() as Books | undefined
     if (!params) {
       this.catalogLoading = false
       this.privacyChecking = false
+      this.accessFailed = true
       this.privacyError = LOCAL_BOOK_MISSING_MESSAGE
       return
     }
@@ -124,25 +157,53 @@ struct BookDetailPage {
     await this.refreshDetailAccess()
   }
 
-  private get accessRequestId(): number {
+  private getAccessRequestId(): number {
     return this.accessRefresh.getRequestId()
   }
 
+  private isCurrentAccessRequest(requestId: number, generation: number): boolean {
+    return BookAccessState.isCurrent(this.pageActive, this.pageReady, requestId, this.getAccessRequestId(),
+      generation, privacySessionService.getGeneration())
+  }
+
   private canShowDetail(): boolean {
-    return this.pageActive && !this.privacyCovered && (!this.privacyRequired ||
-      (privacySessionService.isUnlocked() && this.privacyGeneration === privacySessionService.getGeneration()))
+    return this.pageActive && this.pageReady && !this.privacyCovered &&
+      BookAccessState.canAccess(this.ownership, privacySessionService.isUnlocked(),
+        this.privacyGeneration, privacySessionService.getGeneration())
+  }
+
+  private logAccessLifecycle(event: string) {
+    hilog.info(0x0000, 'BookDetailAccess',
+      '%{public}s ownership=%{public}d generation=%{public}d verified=%{public}d request=%{public}d',
+      event, this.ownership, privacySessionService.getGeneration(), this.privacyGeneration, this.getAccessRequestId())
+  }
+
+  private invalidateDetailAccess(lockPrivate: boolean) {
+    if (lockPrivate && this.ownership === BookOwnership.PRIVATE) {
+      this.coverPrivateDetail()
+      return
+    }
+    this.accessRefresh.invalidate()
+    this.privacyCovered = true
+    this.privacyGeneration = -1
+    this.privacyChecking = !this.accessFailed
+    if (!this.accessFailed) this.privacyError = ''
+    this.isShow = false
+    this.dialogController.close()
   }
 
   private coverPrivateDetail() {
     this.accessRefresh.invalidate()
     this.privacyCovered = true
-    this.privacyChecking = false
+    this.privacyChecking = true
     this.privacyGeneration = -1
-    this.privacyError = '隐私内容已锁定，请重新解锁'
+    if (!this.accessFailed) this.privacyError = ''
     this.isShow = false
     this.CatalogList = []
     this.catalogReady = false
     this.dialogController.close()
+    this.logAccessLifecycle('private-covered')
+    this.autoUnlock?.reconcile()
   }
 
   private async refreshDetailAccess(): Promise<void> {
@@ -153,71 +214,70 @@ struct BookDetailPage {
   }
 
   private async refreshDetailAccessRequest(requestId: number, generation: number): Promise<boolean> {
-    if (!this.pageReady || !this.pageActive || generation !== privacySessionService.getGeneration()) return false
+    if (!this.isCurrentAccessRequest(requestId, generation)) return false
     this.privacyCovered = true
     this.privacyChecking = true
+    this.accessFailed = false
     this.privacyError = ''
+    this.isShow = false
+    this.logAccessLifecycle('refresh-start')
     try {
       const required = await BooksDao.isPrivateBook(this.bookData)
-      if (!this.pageActive || requestId !== this.accessRequestId ||
-        generation !== privacySessionService.getGeneration()) {
-        return false
-      }
-      this.privacyRequired = required
+      if (!this.isCurrentAccessRequest(requestId, generation)) return false
+      this.ownership = BookAccessState.fromPrivate(required)
       this.privacyGeneration = generation
-      if (required && !privacySessionService.isUnlocked()) {
+      this.logAccessLifecycle('refresh-verified')
+      if (this.ownership === BookOwnership.PRIVATE && !privacySessionService.isUnlocked()) {
         this.coverPrivateDetail()
         return false
       }
       this.privacyCovered = false
       if (!this.catalogReady) {
-        await this.initUrlBook(requestId)
+        await this.initUrlBook(requestId, generation)
       }
-      if (!this.canShowDetail() || requestId !== this.accessRequestId) {
-        return false
-      }
+      if (!this.isCurrentAccessRequest(requestId, generation) || !this.canShowDetail()) return false
       this.isShow = true
       if (!this.bookData.isJoin) {
         const isJoin = await booksUtil.isExistBooks(this.bookData.bookUrl, this.bookData.bookName)
-        if (this.canShowDetail() && requestId === this.accessRequestId) {
+        if (this.isCurrentAccessRequest(requestId, generation) && this.canShowDetail()) {
           this.bookData.isJoin = isJoin
         }
       }
-      return this.canShowDetail() && requestId === this.accessRequestId && this.catalogReady
+      return this.isCurrentAccessRequest(requestId, generation) && this.canShowDetail() && this.catalogReady
     } catch (_) {
-      if (requestId === this.accessRequestId) {
-        this.privacyRequired = true
+      if (this.isCurrentAccessRequest(requestId, generation)) {
+        this.ownership = BookOwnership.UNKNOWN
+        this.privacyGeneration = -1
         this.privacyCovered = true
-        this.privacyError = '无法确认书籍访问权限，请返回后重试'
+        this.accessFailed = true
+        this.privacyError = '无法确认书籍访问权限，请重新检查或返回后重试'
         this.isShow = false
+        this.logAccessLifecycle('refresh-failed')
       }
       return false
     } finally {
-      if (requestId === this.accessRequestId) {
+      if (this.isCurrentAccessRequest(requestId, generation)) {
         this.privacyChecking = false
-        if (this.pageActive && this.privacyCovered && !this.privacyError) {
-          this.privacyError = '请解锁后查看书籍详情'
+        if (this.privacyCovered && !this.privacyError && this.accessFailed) {
+          this.privacyError = '请重新检查书籍访问权限'
         }
+        this.logAccessLifecycle('refresh-finished')
       }
+      this.autoUnlock?.reconcile()
     }
   }
 
-  private async unlockDetail() {
-    if (this.privacyBusy) return
+  private async unlockDetail(): Promise<boolean> {
+    if (this.privacyBusy || privacySessionService.isAuthenticating()) return false
     this.privacyBusy = true
     try {
-      const unlocked = await privacySessionService.unlock(this.getUIContext())
-      if (unlocked && this.pageActive) {
-        await this.refreshDetailAccess()
-      } else if (this.pageActive) {
-        this.privacyError = privacySessionService.getLastFailureMessage() || '请解锁后查看隐私内容'
-      }
+      return await privacySessionService.unlock(this.getUIContext())
     } finally {
       this.privacyBusy = false
     }
   }
 
-  async initUrlBook(requestId: number) {
+  async initUrlBook(requestId: number, generation: number) {
     this.catalogLoading = true
     this.catalogError = ''
     this.CatalogList = []
@@ -225,7 +285,7 @@ struct BookDetailPage {
     try {
       path = requireReadableLocalBookPath(this.bookData.bookUrl)
       const handler: bookParser.BookParserHandler = await bookParser.getDefaultHandler(path)
-      if (!this.canShowDetail() || requestId !== this.accessRequestId) return
+      if (!this.isCurrentAccessRequest(requestId, generation) || !this.canShowDetail()) return
       const catalog = handler.getCatalogList() || []
       if (catalog.length === 0) {
         throw new Error('书籍内容为空或格式不受支持')
@@ -233,27 +293,38 @@ struct BookDetailPage {
       this.CatalogList = catalog
       this.catalogReady = true
     } catch (_) {
-      if (this.canShowDetail() && requestId === this.accessRequestId) {
+      if (this.isCurrentAccessRequest(requestId, generation) && this.canShowDetail()) {
         this.catalogError = path.length === 0 ? LOCAL_BOOK_MISSING_MESSAGE :
           '本地书籍解析失败，文件可能损坏或格式不受支持，请重新导入'
       }
     } finally {
-      if (requestId === this.accessRequestId) this.catalogLoading = false
+      if (this.isCurrentAccessRequest(requestId, generation)) this.catalogLoading = false
     }
   }
 
   async openReader(catalogId?: number) {
     if (!this.canShowDetail()) return
-    const requestId = this.accessRequestId
+    const requestId = this.getAccessRequestId()
+    const generation = privacySessionService.getGeneration()
     try {
       const required = await BooksDao.isPrivateBook(this.bookData)
-      this.privacyRequired = required
-      if (requestId !== this.accessRequestId || !this.canShowDetail()) {
-        if (required) this.coverPrivateDetail()
+      if (!this.isCurrentAccessRequest(requestId, generation)) return
+      this.ownership = BookAccessState.fromPrivate(required)
+      this.privacyGeneration = generation
+      this.logAccessLifecycle('reader-verified')
+      if (this.ownership === BookOwnership.PRIVATE && !privacySessionService.isUnlocked()) {
+        this.coverPrivateDetail()
         return
       }
+      if (!this.canShowDetail()) return
     } catch (_) {
-      this.coverPrivateDetail()
+      if (this.isCurrentAccessRequest(requestId, generation)) {
+        this.ownership = BookOwnership.UNKNOWN
+        this.accessFailed = true
+        this.privacyError = '无法确认书籍访问权限，请重新检查或返回后重试'
+        this.invalidateDetailAccess(false)
+        this.logAccessLifecycle('reader-check-failed')
+      }
       return
     }
     try {
@@ -268,6 +339,8 @@ struct BookDetailPage {
       showMessage(this.catalogError || '正在加载本地书籍，请稍候')
       return
     }
+    if (!this.isCurrentAccessRequest(requestId, generation) || !this.canShowDetail()) return
+    this.logAccessLifecycle('reader-open')
     router.pushUrl({
       url: 'pages/view/Reader/ReaderPage3',
       params: { bookData: this.bookData, clickBookCatalogId: catalogId }
@@ -412,16 +485,18 @@ struct BookDetailPage {
   build() {
     if (this.privacyCovered) {
       Column({ space: 18 }) {
-        Text(this.privacyChecking ? '正在确认访问权限…' : '隐私内容已锁定')
-          .fontSize(20).fontWeight(FontWeight.Medium)
-        if (this.privacyChecking) {
+        if (this.resumeAuthPending || (this.ownership === BookOwnership.PRIVATE && !this.accessFailed) ||
+          (this.privacyChecking && !this.accessFailed)) {
+          Text('正在验证访问权限…').fontSize(20).fontWeight(FontWeight.Medium)
           LoadingProgress().width(36).height(36)
         } else {
-          Text(this.privacyError || '解锁后查看书籍详情')
+          Text(BookAccessState.coverTitle(this.ownership, this.privacyChecking, this.accessFailed))
+            .fontSize(20).fontWeight(FontWeight.Medium)
+          Text(this.privacyError || '请重新检查书籍访问权限')
             .fontSize(14).fontColor('#666666').textAlign(TextAlign.Center)
-          Button(this.privacyBusy ? '认证中…' : '解锁并继续')
-            .enabled(!this.privacyBusy)
-            .onClick(() => this.unlockDetail())
+          if (this.pageReady) {
+            Button('重新检查').onClick(() => this.refreshDetailAccess())
+          }
           Button('返回书架').onClick(() => router.back())
         }
       }.width('100%').height('100%').padding(32)

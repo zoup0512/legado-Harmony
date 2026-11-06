@@ -16,6 +16,11 @@ import privacySessionService from '../../../privacy/PrivacySessionService';
 import { PageAccessRefresh } from '../../../privacy/PageAccessRefresh';
 import { ReaderFontManager, ReaderFontOption, SYSTEM_FONT_NAME } from '../../../common/utils/ReaderFontManager';
 import { FontPickerPanel } from '../../../componets/Reader/FontPickerPanel';
+import { ReaderProgress } from '../../../common/utils/ReaderProgress';
+import { ReaderRuntime } from '../../../common/utils/ReaderRuntime';
+import { BookAccessState, BookOwnership } from '../../../privacy/BookAccessState';
+import privacyForeground from '../../../privacy/PrivacyForeground';
+import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../../privacy/PrivateBookAutoUnlock';
 
 interface ParamsObj {
   bookData: Books,
@@ -51,9 +56,10 @@ struct ReaderPage3 {
   //书籍解析用数据
   @State bookData: Books = new Books(); //书籍数据
   @State CatalogList: BasicDataSource<bookParser.CatalogItem> = new BasicDataSource<bookParser.CatalogItem>(); //章节数据
-  readerComponentController: readerCore.ReaderComponentController = new readerCore.ReaderComponentController();
-  //资源请求回调是否已注册（仅使用自定义字体时注册，避免干扰图片/CSS 加载）
-  private fontResourceListenerRegistered: boolean = false;
+  @State readerRuntimes: ReaderRuntime[] = [];
+  private runtime: ReaderRuntime | undefined;
+  private nextRuntimeId: number = 0;
+  private readerComponentController: readerCore.ReaderComponentController | undefined;
   //阅读器设置
   @State isShowCatalogDialog: boolean = false // 目录弹窗
   @State readerSetting: readerCore.ReaderSetting = {
@@ -81,8 +87,11 @@ struct ReaderPage3 {
   @State privacyCovered: boolean = true
   @State privacyChecking: boolean = true
   @State privacyBusy: boolean = false
+  @State resumeAuthPending: boolean = false
+  private autoUnlock: PrivateBookAutoUnlock | undefined;
   @State privacyError: string = ''
-  private privacyRequired: boolean = true;
+  @State accessFailed: boolean = false
+  @State ownership: BookOwnership = BookOwnership.UNKNOWN;
   private privacyGeneration: number = -1;
   private accessRefresh: PageAccessRefresh = new PageAccessRefresh();
   private pageActive: boolean = false;
@@ -97,51 +106,83 @@ struct ReaderPage3 {
   ]
 
   async aboutToAppear() {
-    this.isScreenState = PreferencesUtil.getSync(`isScreenState`, this.isScreenState) as boolean
-    const Brightness = BrightnessUtil.getBrightness('reader')
-    if (Brightness == -1) {
-      this.isLuminanceFollowSystem = true
-    } else {
-      BrightnessUtil.setBrightness('reader', Brightness)
-    }
     this.pageActive = true;
-    this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean) => {
-      if (locked && this.privacyRequired) {
-        this.coverPrivateReader();
+    try {
+      this.isScreenState = PreferencesUtil.getSync(`isScreenState`, this.isScreenState) as boolean
+      const Brightness = BrightnessUtil.getBrightness('reader')
+      if (Brightness == -1) {
+        this.isLuminanceFollowSystem = true
+      } else {
+        BrightnessUtil.setBrightness('reader', Brightness)
       }
-    });
-    this.registerScreenDensityChange();
-    this.registerListener();
-    //  进入阅读页面后隐藏系统状态栏
-    WindowAbility.getInstance().toggleWindowSystemBar([], this.getUIContext().getHostContext());
-    const temp = router.getParams() as ParamsObj
-    if (!temp || !temp.bookData) {
-      this.readerLoading = false
-      this.readerError = '书籍参数无效'
-      this.privacyChecking = false
-      this.privacyError = '书籍参数无效'
-      return
+      this.autoUnlock = new PrivateBookAutoUnlock(privacyForeground, {
+        snapshot: (): PrivateBookUnlockSnapshot => ({
+          active: this.pageActive, ready: this.pageReady, ownership: this.ownership, failed: this.accessFailed,
+          unlocked: privacySessionService.isUnlocked(),
+          authenticating: this.privacyBusy || privacySessionService.isAuthenticating(),
+          generation: privacySessionService.getGeneration()
+        }),
+        unlock: (): Promise<boolean> => this.unlockReader(),
+        restored: (): Promise<void> => this.refreshReaderAccess(),
+        returnToShelf: (): void => {
+          AppStorage.setOrCreate('RETURN_TO_BOOKSHELF', true);
+          router.back({ url: 'pages/Index' });
+        },
+        pendingChanged: (pending: boolean): void => { this.resumeAuthPending = pending; }
+      });
+      this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean) => {
+        this.accessRefresh.invalidate();
+        this.releaseReader();
+        this.privacyCovered = true;
+        this.privacyGeneration = -1;
+        if (locked && this.ownership === BookOwnership.PRIVATE) {
+          this.coverPrivateReader();
+        } else {
+          this.privacyChecking = !this.accessFailed;
+          if (this.pageActive && this.pageReady) this.refreshReaderAccess();
+        }
+        this.autoUnlock?.reconcile();
+        hilog.info(0x0000, 'ReaderAccess', 'Session changed, ownership=%{public}d generation=%{public}d',
+          this.ownership, privacySessionService.getGeneration());
+      });
+      this.registerScreenDensityChange();
+      this.registerListener();
+      // 进入阅读页面后隐藏系统状态栏
+      WindowAbility.getInstance().toggleWindowSystemBar([], this.getUIContext().getHostContext());
+      const temp = router.getParams() as ParamsObj
+      if (!temp || !temp.bookData) {
+        throw new Error('Invalid book parameters');
+      }
+      this.bookData = temp.bookData
+      ReaderProgress.restore(this.bookData, (): Books | undefined => {
+        const key = `BookCurrentData_${this.bookData.bookName}`;
+        return PreferencesUtil.hasSync(key) ? PreferencesUtil.getSync(key, new Books()) as Books : undefined;
+      });
+      try {
+        this.readerSetting = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
+          this.readerSetting) as readerCore.ReaderSetting;
+      } catch (_) {
+        hilog.warn(0x0000, 'ReaderAccess', 'Reader settings unavailable; using defaults');
+      }
+      // 上次选择的字体文件可能已被清理：回退系统字体，避免按钮显示一个用不了的字体名
+      this.normalizeRestoredFont();
+      // 必须在 startPlay 排版前注册，否则恢复阅读时首屏拿不到字体字节
+      this.syncFontResourceListener();
+      // colorModeChange 已有 BookHandler 就绪保护，不会提前调用 setPageConfig
+      this.colorMode = this.readerSetting.nightMode ? 0 : 1
+      this.pageReady = true;
+      await this.refreshReaderAccess();
+    } catch (_) {
+      this.pageReady = false;
+      this.accessRefresh.invalidate();
+      this.privacyCovered = true;
+      this.privacyChecking = false;
+      this.accessFailed = true;
+      this.readerLoading = false;
+      this.privacyError = '阅读页面初始化失败，请返回书架后重试';
+      this.releaseReader();
+      hilog.error(0x0000, 'ReaderAccess', 'Reader page initialization failed');
     }
-    this.bookData = temp.bookData
-    const savedBook = PreferencesUtil.getSync(`BookCurrentData_${this.bookData.bookName}`, null) as Books | null
-    const currentBookUrl = this.bookData.serverBookUrl ?? this.bookData.bookUrl
-    const savedBookUrl = savedBook?.serverBookUrl ?? savedBook?.bookUrl
-    if (savedBook?.localBookDurChapterPos && currentBookUrl && savedBookUrl === currentBookUrl) {
-      this.bookData.localBookDurChapterPos = savedBook.localBookDurChapterPos
-      this.bookData.durChapterIndex = savedBook.durChapterIndex ?? this.bookData.durChapterIndex
-      this.bookData.durChapterTitle = savedBook.durChapterTitle ?? this.bookData.durChapterTitle
-    }
-    this.readerSetting = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
-      this.readerSetting) as readerCore.ReaderSetting;
-    // 上次选择的字体文件可能已被清理：回退系统字体，避免按钮显示一个用不了的字体名
-    this.normalizeRestoredFont();
-    // 必须在 startPlay 排版前注册，否则恢复阅读时首屏拿不到字体字节
-    this.syncFontResourceListener();
-    // 进入前同步日/夜模式，避免初始化后再翻转主题造成闪屏；
-    // colorModeChange 已有 BookHandler 就绪保护，不会提前调用 setPageConfig
-    this.colorMode = this.readerSetting.nightMode ? 0 : 1
-    this.pageReady = true;
-    await this.refreshReaderAccess();
   }
 
   onPageShow(): void {
@@ -149,45 +190,75 @@ struct ReaderPage3 {
     if (this.pageReady) {
       this.refreshReaderAccess();
     }
+    this.autoUnlock?.reconcile();
   }
 
   onPageHide(): void {
     this.pageActive = false;
     this.accessRefresh.invalidate();
-    if (this.privacyRequired) {
+    this.releaseReader();
+    if (this.ownership === BookOwnership.PRIVATE) {
       this.coverPrivateReader();
+    } else {
+      this.privacyCovered = true;
+      this.privacyChecking = !this.accessFailed;
     }
+    this.autoUnlock?.reconcile();
+    hilog.info(0x0000, 'ReaderAccess', 'Page hidden, ownership=%{public}d', this.ownership);
   }
 
-  private get accessRequestId(): number {
+  private getAccessRequestId(): number {
     return this.accessRefresh.getRequestId();
   }
 
+  private isCurrentAccessRequest(requestId: number, generation: number): boolean {
+    return BookAccessState.isCurrent(this.pageActive, this.pageReady, requestId, this.getAccessRequestId(),
+      generation, privacySessionService.getGeneration());
+  }
+
   private canReadCurrentBook(): boolean {
-    return this.pageActive && !this.privacyCovered && (!this.privacyRequired ||
-      (privacySessionService.isUnlocked() && this.privacyGeneration === privacySessionService.getGeneration()));
+    return this.pageActive && !this.privacyCovered && BookAccessState.canAccess(this.ownership,
+      privacySessionService.isUnlocked(), this.privacyGeneration, privacySessionService.getGeneration());
+  }
+
+  private isCurrentRuntime(runtime: ReaderRuntime): boolean {
+    return this.runtime === runtime && runtime.scope.isActive() && this.canReadCurrentBook() &&
+      this.isCurrentAccessRequest(runtime.requestId, runtime.generation);
+  }
+
+  private createReaderRuntime(requestId: number): ReaderRuntime {
+    const runtime = new ReaderRuntime(++this.nextRuntimeId, requestId, privacySessionService.getGeneration());
+    this.runtime = runtime;
+    this.readerComponentController = runtime.controller;
+    this.bindReaderListener(runtime);
+    this.syncFontResourceListener();
+    this.readerRuntimes = [runtime];
+    hilog.info(0x0000, 'ReaderAccess', 'Reader instance created, instance=%{public}d', runtime.id);
+    return runtime;
   }
 
   private releaseReader(): void {
+    const runtime = this.runtime;
+    this.runtime = undefined;
+    this.readerComponentController = undefined;
+    this.readerRuntimes = [];
     this.readerStarted = false;
     this.BookHandler = null;
     this.CatalogList.clear();
-    try {
-      this.readerComponentController.releaseBook();
-    } catch (_) {
-    }
+    runtime?.dispose();
   }
 
   private coverPrivateReader(): void {
     this.accessRefresh.invalidate();
     this.privacyCovered = true;
-    this.privacyChecking = false;
+    this.privacyChecking = !this.accessFailed;
     this.privacyGeneration = -1;
-    this.privacyError = '隐私内容已锁定，请重新解锁';
+    if (!this.accessFailed) this.privacyError = '';
     this.isShowSetting = false;
     this.isShowCatalogDialog = false;
     this.isShowListen = false;
     this.releaseReader();
+    this.autoUnlock?.reconcile();
   }
 
   private async refreshReaderAccess(): Promise<void> {
@@ -201,17 +272,19 @@ struct ReaderPage3 {
     if (!this.pageReady || !this.pageActive || generation !== privacySessionService.getGeneration()) return false;
     this.privacyCovered = true;
     this.privacyChecking = true;
+    this.accessFailed = false;
     this.privacyError = '';
     this.isShowSetting = false;
     this.isShowCatalogDialog = false;
     try {
       const required = await BooksDao.isPrivateBook(this.bookData);
-      if (!this.pageActive || requestId !== this.accessRequestId ||
-        generation !== privacySessionService.getGeneration()) {
+      if (!this.isCurrentAccessRequest(requestId, generation)) {
         return false;
       }
-      this.privacyRequired = required;
+      this.ownership = BookAccessState.fromPrivate(required);
       this.privacyGeneration = generation;
+      hilog.info(0x0000, 'ReaderAccess', 'Ownership verified, ownership=%{public}d generation=%{public}d',
+        this.ownership, generation);
       if (required && !privacySessionService.isUnlocked()) {
         this.coverPrivateReader();
         return false;
@@ -223,94 +296,84 @@ struct ReaderPage3 {
           this.bookData.localBookDurChapterPos?.resourceIndex ?? 0,
           this.bookData.localBookDurChapterPos?.startDomPos ?? '', requestId);
       }
-      return this.canReadCurrentBook() && requestId === this.accessRequestId && this.readerStarted;
+      return this.canReadCurrentBook() && requestId === this.getAccessRequestId() && this.readerStarted;
     } catch (_) {
-      if (requestId === this.accessRequestId) {
-        this.privacyRequired = true;
+      if (this.isCurrentAccessRequest(requestId, generation)) {
+        this.ownership = BookOwnership.UNKNOWN;
         this.privacyCovered = true;
-        this.privacyError = '无法确认书籍访问权限，请返回后重试';
+        this.accessFailed = true;
+        this.privacyError = '无法确认书籍访问权限，请重新检查或返回后重试';
+        hilog.error(0x0000, 'ReaderAccess', 'Book access check failed');
         this.releaseReader();
       }
       return false;
     } finally {
-      if (requestId === this.accessRequestId) {
+      if (this.isCurrentAccessRequest(requestId, generation)) {
         this.privacyChecking = false;
-        if (this.pageActive && this.privacyCovered && !this.privacyError) {
-          this.privacyError = '请解锁后继续阅读';
+        if (this.privacyCovered && !this.privacyError) {
+          this.privacyError = this.ownership === BookOwnership.PRIVATE ? '请解锁后继续阅读' : '请重新检查书籍访问权限';
         }
       }
     }
   }
 
-  private async unlockReader(): Promise<void> {
-    if (this.privacyBusy) {
-      return;
-    }
+  private async unlockReader(): Promise<boolean> {
+    if (this.privacyBusy) return false;
     this.privacyBusy = true;
+    hilog.info(0x0000, 'ReaderAccess', 'Automatic private book authentication started');
     try {
-      const unlocked = await privacySessionService.unlock(this.getUIContext());
-      if (unlocked && this.pageActive) {
-        await this.refreshReaderAccess();
-      } else if (this.pageActive) {
-        this.privacyError = privacySessionService.getLastFailureMessage() || '请解锁后查看隐私内容';
-      }
+      return await privacySessionService.unlock(this.getUIContext());
     } finally {
       this.privacyBusy = false;
     }
   }
 
   private async startPlay(path: string, resourceIndex: number, domPos: string, requestId: number) {
-    if (!this.canReadCurrentBook() || requestId !== this.accessRequestId) {
-      return;
-    }
-    this.readerLoading = true
-    this.readerError = ''
+    if (!this.canReadCurrentBook() || requestId !== this.getAccessRequestId()) return;
+    this.readerLoading = true;
+    this.readerError = '';
+    const runtime = this.createReaderRuntime(requestId);
     try {
-      const localPath = requireReadableLocalBookPath(path)
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      const initPromise: Promise<void> = this.readerComponentController.init(context);
-      const defaultHandler: Promise<bookParser.BookParserHandler> = bookParser.getDefaultHandler(localPath);
-      const result: [bookParser.BookParserHandler, void] = await Promise.all([defaultHandler, initPromise]);
-      if (!this.canReadCurrentBook() || requestId !== this.accessRequestId) {
-        return;
-      }
-      this.BookHandler = result[0];
-      const catalog = this.BookHandler.getCatalogList() || []
-      if (catalog.length === 0) {
-        throw new Error('书籍内容为空或格式不受支持')
-      }
-      this.CatalogList.clear()
-      this.CatalogList.pushAllData(catalog)
-      const safeIndex = Math.max(0, Math.min(resourceIndex || 0, catalog.length - 1))
-      this.bookData.durChapterIndex = safeIndex
-      this.readerComponentController.registerBookParser(this.BookHandler);
-      this.readerComponentController.setPageConfig(this.readerSetting);
+      const localPath = requireReadableLocalBookPath(path);
+      const parserPromise = runtime.scope.wait(bookParser.getDefaultHandler(localPath), 15000, '书籍解析超时，请重试');
+      const readyPromise = runtime.scope.wait(runtime.ready, 10000, '阅读器初始化超时，请重试');
+      const result: [bookParser.BookParserHandler, void] = await Promise.all([parserPromise, readyPromise]);
+      if (!this.isCurrentRuntime(runtime)) return;
+      runtime.parser = result[0];
+      this.BookHandler = runtime.parser;
+      const catalog = runtime.parser.getCatalogList() || [];
+      if (catalog.length === 0) throw new Error('书籍内容为空或格式不受支持');
+      this.CatalogList.clear();
+      this.CatalogList.pushAllData(catalog);
+      const safeIndex = Math.max(0, Math.min(resourceIndex || 0, catalog.length - 1));
+      this.bookData.durChapterIndex = safeIndex;
+      runtime.controller.registerBookParser(runtime.parser);
+      runtime.controller.setPageConfig(this.readerSetting);
+      hilog.info(0x0000, 'ReaderAccess', 'Reader instance starting, instance=%{public}d', runtime.id);
+      await runtime.scope.wait(runtime.controller.startPlay(safeIndex, domPos), 15000, '正文启动超时，请重试');
+      if (!this.isCurrentRuntime(runtime)) return;
+      await runtime.scope.wait(runtime.firstFrame, 10000, '正文显示超时，请重试');
+      if (!this.isCurrentRuntime(runtime)) return;
       this.readerStarted = true;
-      await this.readerComponentController.startPlay(safeIndex, domPos);
-      if (!this.canReadCurrentBook() || requestId !== this.accessRequestId) {
-        if (requestId === this.accessRequestId) this.releaseReader();
-        return;
-      }
-      hilog.info(0x0000, 'testTag', 'catalog list length: ' + this.CatalogList.totalCount());
+      this.readerLoading = false;
+      hilog.info(0x0000, 'ReaderAccess', 'Reader first frame ready, instance=%{public}d', runtime.id);
     } catch (err) {
-      if (this.canReadCurrentBook() && requestId === this.accessRequestId) {
-        this.readerStarted = false;
-        this.readerError = err instanceof Error ? err.message : '书籍加载失败';
+      if (this.runtime === runtime && this.isCurrentAccessRequest(requestId, runtime.generation)) {
+        const message = err instanceof Error ? err.message : '书籍加载失败';
+        this.releaseReader();
+        this.readerError = message;
+        this.readerLoading = false;
+        hilog.error(0x0000, 'ReaderAccess', 'Reader instance load failed, instance=%{public}d', runtime.id);
       }
     } finally {
-      if (this.canReadCurrentBook() && requestId === this.accessRequestId) {
-        if (this.readerError.length > 0) {
-          this.readerLoading = false;
-        } else {
-          // 正常路径等首帧回调；旧请求不能在重锁后撤下遮挡。
-          setTimeout(() => {
-            if (this.canReadCurrentBook() && requestId === this.accessRequestId) {
-              this.readerLoading = false;
-            }
-          }, 3000);
-        }
-      }
+      if (this.runtime === runtime && !this.isCurrentRuntime(runtime)) this.releaseReader();
     }
+  }
+
+  private async retryReader(): Promise<void> {
+    this.accessRefresh.invalidate();
+    this.releaseReader();
+    await this.refreshReaderAccess();
   }
 
   /**
@@ -327,7 +390,7 @@ struct ReaderPage3 {
       this.readerSetting.themeColor = '#FFFFFF';
     }
     if (this.BookHandler) {
-      this.readerComponentController.setPageConfig(this.readerSetting);
+      this.readerComponentController?.setPageConfig(this.readerSetting);
     }
   }
 
@@ -346,13 +409,16 @@ struct ReaderPage3 {
     display.on('change', this.screenDensityCallBack);
   }
 
-  private registerListener(): void {
-    this.readerComponentController.on('pageShow', (data: readerCore.PageDataInfo): void => {
-      if (!this.canReadCurrentBook()) {
+  private bindReaderListener(runtime: ReaderRuntime): void {
+    runtime.controller.on('pageShow', (data: readerCore.PageDataInfo): void => {
+      if (!this.isCurrentRuntime(runtime)) return;
+      if (data.state === readerCore.PageState.OPEN_BOOK_FAIL) {
+        runtime.frameFailed();
         return;
       }
-      // 首帧真正渲染完成才撤加载层，避免提前露出未绘制画布造成闪屏
-      this.readerLoading = false;
+      if (data.state !== readerCore.PageState.PAGE_ON_SHOW) return;
+      runtime.frameShown();
+      hilog.info(0x0000, 'ReaderAccess', 'Reader page shown, instance=%{public}d', runtime.id);
       this.bookData.localBookDurChapterPos = data;
       // ReaderKit 的 resourceIndex 基于 spine，可能超出目录列表范围；
       // 只接受范围内的下标，避免越界值写入 bookData 并持久化
@@ -368,6 +434,9 @@ struct ReaderPage3 {
       //  保存阅读器设置。
       PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerSetting)
     });
+  }
+
+  private registerListener(): void {
     WindowAbility.getInstance().onWindowSizeChange(() => {
       if (!this.canReadCurrentBook() || !this.BookHandler) {
         return;
@@ -378,7 +447,7 @@ struct ReaderPage3 {
         this.readerSetting.viewPortWidth = this.windowWidth;
         this.readerSetting.viewPortHeight = this.windowHeight;
         try {
-          this.readerComponentController.setPageConfig(this.readerSetting);
+          this.readerComponentController?.setPageConfig(this.readerSetting);
         } catch (e) {
           console.error('onWindowSizeChange, error ' + JSON.stringify(e));
         }
@@ -392,30 +461,32 @@ struct ReaderPage3 {
     this.accessRefresh.invalidate();
     this.unsubscribePrivacy?.();
     this.unsubscribePrivacy = undefined;
+    this.autoUnlock?.dispose();
+    this.autoUnlock = undefined;
     WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());
     PreferencesUtil.putSync(`isScreenState`, this.isScreenState)
     display.off('change', this.screenDensityCallBack);
-    this.readerComponentController.off('pageShow');
-    this.readerComponentController.off('resourceRequest');
     this.releaseReader();
   }
 
   build() {
     Stack() {
-      ReadPageComponent({
-        controller: this.readerComponentController,
-        readerCallback: (err: BusinessError, data: readerCore.ReaderComponentController) => {
-          // 失败分支 data 可能为 undefined，不能覆盖已有 controller
-          if (data) {
-            this.readerComponentController = data;
+      ForEach(this.readerRuntimes, (runtime: ReaderRuntime) => {
+        ReadPageComponent({
+          controller: runtime.controller,
+          readerCallback: (err: BusinessError, data: readerCore.ReaderComponentController) => {
+            runtime.componentReady(err, data);
+            if (this.runtime === runtime && runtime.scope.isActive()) {
+              hilog.info(0x0000, 'ReaderAccess', 'Reader component mounted, instance=%{public}d code=%{public}d',
+                runtime.id, err?.code ?? 0);
+            }
           }
-          if (err && err.code) {
-            this.readerLoading = false
-            this.readerError = err.message || '阅读器初始化失败'
-          }
-        }
-      }).width('100%').height('100%')
-        .visibility(this.privacyCovered ? Visibility.Hidden : Visibility.Visible)
+        }).width('100%').height('100%')
+          .visibility(this.privacyCovered ? Visibility.Hidden : Visibility.Visible)
+          .onAppear(() => {
+            runtime.initialize(this.getUIContext().getHostContext() as common.UIAbilityContext);
+          })
+      }, (runtime: ReaderRuntime): string => runtime.id.toString())
 
       if (!this.privacyCovered) {
       if (this.readerLoading || this.readerError.length > 0) {
@@ -430,6 +501,7 @@ struct ReaderPage3 {
             Text(this.readerError).fontSize(14)
               .fontColor(this.colorMode == 0 ? 'rgba(248,249,250,0.7)' : '#666666')
               .textAlign(TextAlign.Center)
+            Button('重新加载').onClick(() => this.retryReader())
             Button('返回书架')
               .height(40)
               .fontSize(14)
@@ -582,7 +654,7 @@ struct ReaderPage3 {
                     .layoutWeight(1)
                     .onChange((value) => {
                       this.readerSetting.fontSize = value
-                      this.readerComponentController.setPageConfig(this.readerSetting);
+                      this.readerComponentController?.setPageConfig(this.readerSetting);
                     })
                   Button(this.readerSetting.fontName === '' || this.readerSetting.fontName === SYSTEM_FONT_NAME
                     ? '字体' : `字体·${this.readerSetting.fontName}`)
@@ -620,7 +692,7 @@ struct ReaderPage3 {
                     .layoutWeight(1)
                     .onChange((value) => {
                       this.readerSetting.lineHeight = value
-                      this.readerComponentController.setPageConfig(this.readerSetting);
+                      this.readerComponentController?.setPageConfig(this.readerSetting);
                     })
                   /*Row() {
                     Button('更多').bindSheet($$this.isShowMoreLayout, this.LayoutMoreDialog(), {
@@ -667,7 +739,7 @@ struct ReaderPage3 {
                           this.readerSetting.fontColor = item.fontColor;
                           this.readerSetting.themeColor = item.themeColor;
                           this.readerSetting.themeBgImg = item.themeBgImg;
-                          this.readerComponentController.setPageConfig(this.readerSetting);
+                          this.readerComponentController?.setPageConfig(this.readerSetting);
                         })
                       })
                     }
@@ -694,7 +766,7 @@ struct ReaderPage3 {
                         this.readerSetting.flipMode = '0';
                         promptAction.showToast({ message: '仿真' })
                       }
-                      this.readerComponentController.setPageConfig(this.readerSetting);
+                      this.readerComponentController?.setPageConfig(this.readerSetting);
                     })
                   // Button('更多设置')
                 }
@@ -757,7 +829,7 @@ struct ReaderPage3 {
                     this.readerSetting.fontColor = '#000000';
                     this.readerSetting.themeColor = '#FFFFFF';
                   }
-                  this.readerComponentController.setPageConfig(this.readerSetting);
+                  this.readerComponentController?.setPageConfig(this.readerSetting);
                 })
               }
 
@@ -783,17 +855,23 @@ struct ReaderPage3 {
       })
       } else {
         Column({ space: 18 }) {
-          Text(this.privacyChecking ? '正在确认访问权限…' : '隐私内容已锁定')
-            .fontSize(20).fontWeight(FontWeight.Medium)
-          if (this.privacyChecking) {
+          if (!this.accessFailed && (this.resumeAuthPending || this.ownership === BookOwnership.PRIVATE)) {
+            Text('正在验证访问权限…').fontSize(20).fontWeight(FontWeight.Medium)
             LoadingProgress().width(36).height(36)
           } else {
-            Text(this.privacyError || '解锁后继续阅读')
-              .fontSize(14).fontColor('#666666').textAlign(TextAlign.Center)
-            Button(this.privacyBusy ? '认证中…' : '解锁并继续')
-              .enabled(!this.privacyBusy)
-              .onClick(() => this.unlockReader())
-            Button('返回书架').onClick(() => router.back())
+            Text(this.accessFailed && !this.pageReady ? '阅读页面初始化失败' :
+              BookAccessState.coverTitle(this.ownership, this.privacyChecking, this.accessFailed))
+              .fontSize(20).fontWeight(FontWeight.Medium)
+            if (this.privacyChecking) {
+              LoadingProgress().width(36).height(36)
+            } else {
+              Text(this.privacyError || '请重新检查书籍访问权限')
+                .fontSize(14).fontColor('#666666').textAlign(TextAlign.Center)
+              if (this.pageReady) {
+                Button('重新检查').onClick(() => this.refreshReaderAccess())
+              }
+              Button('返回书架').onClick(() => router.back())
+            }
           }
         }.width('100%').height('100%').padding(32)
         .justifyContent(FlexAlign.Center)
@@ -957,7 +1035,7 @@ struct ReaderPage3 {
     this.readerSetting.fontName = option.name;
     this.readerSetting.fontPath = option.path;
     this.syncFontResourceListener();
-    this.readerComponentController.setPageConfig(this.readerSetting);
+    this.readerComponentController?.setPageConfig(this.readerSetting);
     PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerSetting)
   }
 
@@ -966,18 +1044,20 @@ struct ReaderPage3 {
    * 只有使用自定义字体时才注册，其它情况保持不注册，避免影响内核默认的图片/CSS 加载。
    */
   private syncFontResourceListener(): void {
+    const runtime = this.runtime;
+    if (!runtime || !runtime.scope.isActive()) return;
     const fontPath = this.readerSetting.fontPath;
     const needFont = !!fontPath && fontPath.length > 0;
-    if (needFont && !this.fontResourceListenerRegistered) {
-      this.readerComponentController.on('resourceRequest', (url: string): ArrayBuffer => {
-        hilog.info(0x0000, 'ReaderFont', 'resourceRequest: %{public}s', url);
+    if (needFont && !runtime.fontListenerRegistered) {
+      runtime.controller.on('resourceRequest', (url: string): ArrayBuffer => {
+        if (!this.isCurrentRuntime(runtime)) return new ArrayBuffer(0);
         const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
         return ReaderFontManager.serveFontResource(context, this.readerSetting.fontPath, url);
       });
-      this.fontResourceListenerRegistered = true;
-    } else if (!needFont && this.fontResourceListenerRegistered) {
-      this.readerComponentController.off('resourceRequest');
-      this.fontResourceListenerRegistered = false;
+      runtime.fontListenerRegistered = true;
+    } else if (!needFont && runtime.fontListenerRegistered) {
+      runtime.controller.off('resourceRequest');
+      runtime.fontListenerRegistered = false;
     }
   }
 
@@ -1047,7 +1127,7 @@ struct ReaderPage3 {
       this.readerStarted && this.canReadCurrentBook()) {
       try {
         // 路径未变也要触发内核重载；中间配置不写入偏好，最终保留用户的字体选择。
-        this.readerComponentController.setPageConfig({
+        this.readerComponentController?.setPageConfig({
           fontName: SYSTEM_FONT_NAME,
           fontPath: '',
           fontSize: this.readerSetting.fontSize,
@@ -1134,7 +1214,7 @@ struct ReaderPage3 {
     // 根据目录项获取章节的索引
     const resourceIndex = this.getResourceItemByCatalog(catalogItem).index;
     // 跳转到指定章节
-    this.readerComponentController.startPlay(resourceIndex, '');
+    this.readerComponentController?.startPlay(resourceIndex, '');
   }
 
   /**
