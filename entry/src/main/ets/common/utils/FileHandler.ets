@@ -1,3 +1,4 @@
+import Logger from './Logger';
 import { BusinessError } from '@ohos.base';
 import fs, { Options } from '@ohos.file.fs';
 import { common } from '@kit.AbilityKit';
@@ -12,7 +13,6 @@ import localBookImportService, {
   LocalBookImportStatus
 } from './LocalBookImportService';
 
-import { hilog } from '@kit.PerformanceAnalysisKit';
 
 let options: Options = {
   encoding: 'utf-8'
@@ -25,33 +25,11 @@ export class FileHandler {
 
   // Never log arbitrary platform messages: they can contain paths or document names.
   private static logImportError(requestId: string, stage: string, error: BusinessError) {
-    const message = error.message ?? '';
-    let safeMessage = '[redacted]';
-    if (message === 'Parameter error.' || message === 'Permission denied.' ||
-      message === 'Operation canceled.' || message === 'Operation cancelled.') {
-      safeMessage = message;
-    }
-    hilog.error(0x0000, 'LocalImport',
-      'request=%{public}s stage=%{public}s code=%{public}s message=%{public}s messageLength=%{public}d',
-      requestId, stage, String(error.code ?? 'unknown'), safeMessage, message.length);
-  }
-
-  private static uriSummary(uri: string): string {
-    const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/([^/?#]*)/.exec(uri);
-    const scheme = match && ['file', 'content', 'datashare'].includes(match[1]) ? match[1] : 'other';
-    const authority = match ? match[2] : '';
-    // Only known system providers are public; arbitrary authorities may contain personal data.
-    const provider = ['docs', 'media', 'com.ohos.UserFile.ExternalFileManager'].includes(authority) ?
-      authority : 'other';
-    return `scheme=${scheme} provider=${provider} uriLength=${uri.length}`;
+    Logger.error('LocalImport picker failed', stage, error.code ?? 0);
   }
 
   static async CopyFile(context: common.UIAbilityContext, srcUrl: string, currentIndex: number,
     requestId: string = FileHandler.createImportRequestId()): Promise<boolean> {
-    const started = Date.now();
-    hilog.info(0x0000, 'LocalImport',
-      'request=%{public}s stage=copy.start contextAvailable=%{public}s %{public}s',
-      requestId, String(!!context), FileHandler.uriSummary(srcUrl));
     if (!context || !context.filesDir || !srcUrl) {
       showMessage('本地导入失败，请查看 LocalImport 日志');
       return false;
@@ -71,9 +49,6 @@ export class FileHandler {
       return false;
     }
     const result = await localBookImportService.importSingle(context, candidate, currentIndex, requestId);
-    hilog.info(0x0000, 'LocalImport',
-      'request=%{public}s stage=copy.done status=%{public}s elapsedMs=%{public}d',
-      requestId, result.status, Date.now() - started);
     if (result.status === LocalBookImportStatus.IMPORTED) {
       showMessage('导入并添加到书架成功');
       return true;
@@ -96,7 +71,7 @@ export class FileHandler {
       let JSONString = buffer.from(arrayBuffer, 0, readLen).toString();
       return JSONString
     } catch (e) {
-      console.error(`读取失败：${e}`);
+      Logger.error('FileHandler.ReadJSONFile failed', Logger.errorSummary(e));
       return ''
     }
   }
@@ -104,7 +79,6 @@ export class FileHandler {
   static async readFile(readFileUrl: string) {
     let chapterNumber = 0
     const chapters: chaptersItem[] = [];
-    console.info('readFileUrl:' + readFileUrl)
     //const regex = /===第(.*?)章 (.*?)===/g;
     const regex =
       /^[=|<]{0,4}((?:序章|楔子|番外|第\s{0,4})([\d〇零一二两三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟]+?\s{0,4})(?:章|回(?!合)|话(?!说)|节(?!课)|卷|篇(?!张)))(.{0,30})/g;
@@ -123,7 +97,7 @@ export class FileHandler {
         }
       }
     }).catch((err: BusinessError) => {
-      console.error("readLines failed with error message: " + err.message + ", error code: " + err.code);
+      Logger.error('FileHandler.readFile failed', Logger.errorSummary(err));
     });
     // 移除chapters中content内容字符不超过5个字符的删除
     for (let i = 0; i < chapters.length; i++) {
@@ -148,11 +122,7 @@ export class FileHandler {
 
   static async documentPickerFile(context: common.UIAbilityContext, fileSuffixFilters: Array<string>,
     maxSelectNumber: number = 1, requestId: string = FileHandler.createImportRequestId()): Promise<string[]> {
-    const started = Date.now();
     let stage = 'picker.context';
-    hilog.info(0x0000, 'LocalImport',
-      'request=%{public}s stage=picker.request contextAvailable=%{public}s mode=FILE max=%{public}d filters=%{public}s',
-      requestId, String(!!context), maxSelectNumber, fileSuffixFilters.join(','));
     try {
       if (!context) {
         throw new Error('Import context unavailable');
@@ -164,24 +134,11 @@ export class FileHandler {
       stage = 'picker.construct';
       const documentViewPicker = new picker.DocumentViewPicker(context);
       stage = 'picker.select';
-      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.select.begin', requestId);
       const result: Array<string> = await documentViewPicker.select(documentSelectOptions);
-      hilog.info(0x0000, 'LocalImport',
-        'request=%{public}s stage=picker.select.end count=%{public}d elapsedMs=%{public}d',
-        requestId, result.length, Date.now() - started);
-      if (result.length === 0) {
-        hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.cancelOrEmpty', requestId);
-      }
-      for (let index = 0; index < result.length; index++) {
-        hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.result index=%{public}d %{public}s',
-          requestId, index, FileHandler.uriSummary(result[index]));
-      }
       return result;
     } catch (error) {
       const err = error as BusinessError;
       FileHandler.logImportError(requestId, stage, err);
-      hilog.info(0x0000, 'LocalImport', 'request=%{public}s stage=picker.failed elapsedMs=%{public}d',
-        requestId, Date.now() - started);
       // Do not guess cancellation from an undocumented error code.
       showMessage('文件选择未完成，请查看 LocalImport 日志');
       return [];
@@ -189,20 +146,17 @@ export class FileHandler {
   }
 
   static async readJsonFile<T>(pathUrl: string): Promise<T | undefined> {
-    console.info('TagInfo', '文件路径：' + pathUrl);
     try {
       const readString = await fs.readText(pathUrl);
-      console.info('TagInfo', '读取的数据内容：' + readString);
       const data: T = JSON.parse(readString)
       return data
     } catch (err) {
-      console.error('TagInfo', `未读取到：${err}`);
+      Logger.error('FileHandler.readJsonFile failed', Logger.errorSummary(err));
       return undefined
     }
   }
 
   static writeJsonFile(pathUrl: string, context: ArrayBuffer | string) {
-    console.info('TagInfo', '文件地址：' + pathUrl);
     try {
       // 创建文件，并且写入内容，若是存在则重写内容
       let res = fs.accessSync(pathUrl);
@@ -216,7 +170,7 @@ export class FileHandler {
       fs.close(file);
       return '写入成功'
     } catch (e) {
-      console.error('TagInfo', '写入失败' + JSON.stringify(e))
+      Logger.error('FileHandler.writeJsonFile failed', Logger.errorSummary(e))
       return '写入失败' + JSON.stringify(e)
     }
   }
@@ -226,7 +180,7 @@ export class FileHandler {
       fs.unlinkSync(pathUrl);
       return '删除成功'
     } catch (e) {
-      console.error('TagError', '删除失败' + JSON.stringify(e))
+      Logger.error('FileHandler.deleteJsonFile failed', Logger.errorSummary(e))
       return '删除失败'
     }
   }

@@ -52,7 +52,7 @@ export default struct CustomDialogComponent {
           router.pushUrl({
             url: CommonConstants.PRIVACY_PAGE_URL
           }).catch((error: Error) => {
-            Logger.error(CommonConstants.CUSTOM_DIALOG_TAG, 'CustomDialog pushUrl error ' + JSON.stringify(error));
+            Logger.error('CustomDialogComponent.build failed', Logger.errorSummary(error));
           });
         })
       Text($r('app.string.dialog_text_declaration_prompt'))

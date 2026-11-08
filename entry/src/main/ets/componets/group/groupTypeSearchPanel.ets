@@ -112,7 +112,6 @@ export default struct groupTypeSearchPanel{
           dragBar: true,
           maskColor: 'rgba(0,0,0,0.6)',
           onDisappear:()=>{
-            console.log('隐藏')
           }
         })
 

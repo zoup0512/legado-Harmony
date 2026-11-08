@@ -174,7 +174,6 @@ export default struct groupTypePanel {
           dragBar: true,
           maskColor: 'rgba(0,0,0,0.6)',
           onDisappear: () => {
-            console.log('隐藏')
           }
         })
 

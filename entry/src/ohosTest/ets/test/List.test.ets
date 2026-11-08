@@ -5,7 +5,7 @@ import privacyCredentialServiceTest from './PrivacyCredentialService.test'
 import privacySessionTest from './PrivacySession.test'
 import privacyAccessGuardTest from './PrivacyAccessGuard.test'
 import pageAccessRefreshTest from './PageAccessRefresh.test'
-import privacyWindowStartupTest from './PrivacyWindowStartup.test'
+import windowContentStartupTest from './WindowContentStartup.test'
 import privacyMonotonicClockTest from './PrivacyMonotonicClock.test'
 import privacyOwnershipLookupTest from './PrivacyOwnershipLookup.test'
 import readerFontLogicTest from './ReaderFontLogic.test'
@@ -15,6 +15,8 @@ import bookAccessCheckTest from './BookAccessCheck.test'
 import bookAccessStateTest from './BookAccessState.test'
 import privateBookAutoUnlockTest from './PrivateBookAutoUnlock.test'
 import dbUtilQueryTest from './DbUtilQuery.test'
+import loggerTest from './Logger.test'
+import marketUpdateControllerTest from './MarketUpdateController.test'
 
 export default function testsuite() {
   abilityTest()
@@ -24,7 +26,7 @@ export default function testsuite() {
   privacySessionTest()
   privacyAccessGuardTest()
   pageAccessRefreshTest()
-  privacyWindowStartupTest()
+  windowContentStartupTest()
   privacyMonotonicClockTest()
   privacyOwnershipLookupTest()
   readerFontLogicTest()
@@ -34,4 +36,6 @@ export default function testsuite() {
   bookAccessStateTest()
   privateBookAutoUnlockTest()
   dbUtilQueryTest()
+  loggerTest()
+  marketUpdateControllerTest()
 }

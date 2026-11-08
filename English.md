@@ -46,7 +46,7 @@ A successful import means that a file has been saved, not that every file can be
 - A forgotten PIN can only be reset with biometrics enabled beforehand. If unavailable, authentication cannot be bypassed; private books are not automatically deleted or made public. Keep the PIN safe.
 - Existing private books without a PIN require the previous biometric authentication before setting one, preventing an unauthenticated visitor from taking over old data.
 - Leaving the application locks access and hides private lists, details, chapters and book content. Private books are not written to public reading history; existing history is filtered against current private ownership.
-- The main window always enables system privacy protection, including the public bookshelf, PIN entry and reader. System screenshots and recording are blocked, and recent tasks show a privacy mask. If protection cannot be enabled, application content is not loaded; close and reopen the application to retry.
+- The application no longer actively restricts system screenshots or screen recording. Locking access and hiding private pages when leaving the application do not guarantee that recent-task snapshots are obscured.
 - This is in-app access control, not file encryption or a replacement for the device lock screen and backups. It does not prevent authorized sandbox extraction tools or external cameras from obtaining content.
 
 ## Project scope
@@ -60,6 +60,10 @@ The HarmonyOS application consists of `entry`, `commons/colorLibrary` and `reade
 Build with DevEco Studio's bundled Node/Hvigor and the installed HarmonyOS SDK. Keep product, module and SDK selections consistent with the local project rather than renaming targets just to run tests.
 
 Certificate paths, signing profiles, keys and passwords are machine-local configuration and must not be shared or committed. Configure signing locally in DevEco and exclude those differences before committing. Although `signing.properties` is ignored, this project does not currently load it as an override: creating the file alone has no effect. Preserve existing local signing edits; migration to a local override mechanism is a separate change.
+
+### Development logs
+
+- Production code uses a shared HiLog wrapper. Debug logging is disabled by default and enabled only by the application's generated `BuildProfile.DEBUG`; release builds emit no debug traces. Fixed events may be public, while necessary dynamic details use private arguments. Book content, complete business objects and preference values are not logged.
 
 ## Disclaimer
 

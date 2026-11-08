@@ -1,13 +1,13 @@
 import UIAbility from '@ohos.app.ability.UIAbility';
-import hilog from '@ohos.hilog';
+import BuildProfile from 'BuildProfile';
+import Logger from '../common/utils/Logger';
 import window from '@ohos.window';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { AbilityConstant, Configuration, Want } from '@kit.AbilityKit';
 import display from '@ohos.display';
 import DbUtil from '../common/utils/DbUtil';
 import DataBase from '../database'
-import { promptAction } from '@kit.ArkUI';
-import { loadPrivacyProtectedContent } from '../privacy/PrivacyWindowStartup';
+import { loadWindowContentWhenReady } from './WindowContentStartup';
 import { themeManager, ThemeManager } from '../common/utils/ThemeManager';
 import { AppUtil } from '@pura/harmony-utils';
 import { WindowAbility } from './WindowAbility';
@@ -43,14 +43,15 @@ export default class EntryAbility extends UIAbility {
   }
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
+    Logger.configureDebug(BuildProfile.DEBUG);
     privacyCredentialService.init(this.context);
-    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate');
+    Logger.debug('Ability onCreate');
     AppUtil.init(this.context);
     WindowAbility.getInstance().initContext(this.context)
   }
 
   onDestroy() {
-    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onDestroy');
+    Logger.debug('Ability onDestroy');
   }
 
   onWindowStageCreate(windowStage: window.WindowStage) {
@@ -65,11 +66,11 @@ export default class EntryAbility extends UIAbility {
     const pathDir = this.context.filesDir;
     AppStorage.setOrCreate('pathDir', pathDir);
     // Main window is created, set main page for this ability
-    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+    Logger.debug('Ability onWindowStageCreate');
     // 全屏
     windowStage.getMainWindow((err, windowClass) => {
       if (err.code) {
-        hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
+        Logger.error('Failed to load application content', String(err.code));
         return
       }
       // 初始化屏幕亮度设置
@@ -78,10 +79,10 @@ export default class EntryAbility extends UIAbility {
       //全屏
       windowClass.setWindowLayoutFullScreen(true)
         .then(() => {
-          console.info('Succeeded in setting the window layout to full-screen mode.');
+          Logger.debug('Window layout set to full-screen mode');
         })
         .catch((err: BusinessError) => {
-          console.error('Failed to set the window layout to full-screen mode. Cause:' + JSON.stringify(err));
+          Logger.error('Failed to set full-screen layout', String(err.code));
         });
       //获取上下遮挡区域
       let type = window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR; //导航栏
@@ -121,36 +122,27 @@ export default class EntryAbility extends UIAbility {
       });
     })
 
-    this.loadProtectedContent(windowStage);
+    this.loadApplicationContent(windowStage);
   }
 
-  private async loadProtectedContent(windowStage: window.WindowStage): Promise<void> {
+  private async loadApplicationContent(windowStage: window.WindowStage): Promise<void> {
     try {
-      await loadPrivacyProtectedContent(async (): Promise<void> => {
-        const mainWindow = await windowStage.getMainWindow();
-        if (this.windowStage !== windowStage) return;
-        // Keep protection on for the whole window, including PIN entry and background transitions.
-        await mainWindow.setWindowPrivacyMode(true);
+      await loadWindowContentWhenReady(async (): Promise<void> => {
+        await windowStage.getMainWindow();
       }, (): boolean => this.windowStage === windowStage, (): void => {
-        windowStage.loadContent('pages/welcomePage', (err, data) => {
+        windowStage.loadContent('pages/welcomePage', (err) => {
           if (this.windowStage !== windowStage) return;
           if (err.code) {
-            hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
+            Logger.error('Failed to load application content', String(err.code));
             return;
           }
           themeManager.init();
-          hilog.info(0x0000, 'testTag', 'Succeeded in loading the content. Data: %{public}s', JSON.stringify(data) ?? '');
+          Logger.debug('Application content loaded');
         });
       });
-    } catch (_) {
+    } catch (error) {
       if (this.windowStage !== windowStage) return;
-      privacySessionService.lock();
-      hilog.error(0x0000, 'testTag', 'Privacy window protection failed; application content was not loaded.');
-      try {
-        await promptAction.showToast({ message: '无法启用系统隐私保护，请关闭并重新打开应用' });
-      } catch (_) {
-        // Never fall back to loading sensitive content without native protection.
-      }
+      Logger.error('Application window startup failed', Logger.errorSummary(error));
     }
   }
 
@@ -178,19 +170,19 @@ export default class EntryAbility extends UIAbility {
     privacyForeground.leave();
     privacySessionService.lock();
     // Main window is destroyed, release UI related resources
-    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageDestroy');
+    Logger.debug('Ability onWindowStageDestroy');
   }
 
   onForeground() {
     // Privacy sessions never survive a background transition.
     privacySessionService.lock();
     privacyForeground.enter();
-    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onForeground');
+    Logger.debug('Ability onForeground');
   }
 
   onBackground() {
     privacyForeground.leave();
     privacySessionService.lock();
-    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onBackground');
+    Logger.debug('Ability onBackground');
   }
 }

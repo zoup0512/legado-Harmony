@@ -18,7 +18,6 @@ export default class ChaptersDataSource extends BasicDataSource<chaptersItem>{
     }
 
     public getListData(): chaptersItem[] {
-      console.log('getListData', JSON.stringify( this.dataArray))
       return this.dataArray;
     }
 

@@ -1,48 +1,85 @@
 import { dataItem } from 'ets/componets/dataList/dataItem';
 import { router } from '@kit.ArkUI';
-import { common, Want } from '@kit.AbilityKit';
-import { BusinessError } from '@ohos.base';
-import hilog from '@ohos.hilog';
+import { bundleManager, common, Want } from '@kit.AbilityKit';
 import { productViewManager } from '@kit.StoreKit';
+import Logger from '../../../../common/utils/Logger';
+import { MarketUpdateCallbacks, MarketUpdateController, MarketUpdateFailure } from '../../../../common/utils/MarketUpdateController';
+import { showMessage } from '../../../../componets/common/promptShow';
 
 @Entry
 @Component
 struct AboutUsPage {
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
-  @State version: string = "V1.0.0.1"
+  @State version: string = ''
   @State first_list: dataItem[] = [
     new dataItem("检查更新", 1),
-    new dataItem("更新日志", 2),
   ];
   @State end_list: dataItem[] = [
     new dataItem("用户隐私与协议", 1),
     new dataItem("免责声明", 3),
   ]
+  private marketUpdate: MarketUpdateController = new MarketUpdateController()
+
+  aboutToAppear(): void {
+    this.marketUpdate.activate()
+    try {
+      const info = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT)
+      this.version = info.versionName ? `V${info.versionName}` : ''
+    } catch (_) {
+      this.version = ''
+      Logger.error('AboutUsPage: failed to read installed app version')
+    }
+  }
+
+  onPageShow(): void {
+    this.marketUpdate.activate()
+  }
+
+  onPageHide(): void {
+    this.marketUpdate.deactivate()
+  }
+
+  aboutToDisappear(): void {
+    this.marketUpdate.deactivate()
+  }
+
+  private openMarket(): void {
+    this.marketUpdate.open((callbacks: MarketUpdateCallbacks): void => {
+      const request: Want = {
+        parameters: {
+          bundleName: 'com.razor.h.reader'
+        }
+      }
+      productViewManager.loadProduct(getContext(this) as common.UIAbilityContext, request, {
+        onError: (): void => { callbacks.onError() },
+        onAppear: (): void => { callbacks.onAppear() },
+        onDisappear: (): void => { callbacks.onDisappear() }
+      })
+    }, (failure: MarketUpdateFailure): void => {
+      if (failure === MarketUpdateFailure.TIMEOUT) {
+        Logger.warn('AboutUsPage: app market opening timed out')
+        this.showMarketMessage('未收到应用市场响应，请稍后重试或前往应用市场搜索“密读”查看更新')
+      } else {
+        Logger.warn('AboutUsPage: failed to open app market')
+        this.showMarketMessage('无法打开应用市场，请稍后重试或前往应用市场搜索“密读”查看更新')
+      }
+    })
+  }
+
+  private showMarketMessage(message: string): void {
+    try {
+      showMessage(message, 3000)
+    } catch (_) {
+      Logger.warn('AboutUsPage: failed to show app market feedback')
+    }
+  }
+
   firstUrl_list(value: number | string) {
     switch (value) {
       case 1:
-      // 跳转到应用市场
-        try {
-          const request: Want = {
-            parameters: {
-              bundleName: 'com.razor.h.reader'
-            }
-          };
-          productViewManager.loadProduct(getContext(this) as common.UIAbilityContext, request, {
-            onError: (error: BusinessError) => {
-              hilog.info(0, 'TAG', `loadProduct onError. code is ${error.code}, message is ${error.message}`);
-            }
-          });
-        } catch (err) {
-          hilog.error(0, 'TAG', `loadProduct failed. code is ${err.code}, message is ${err.message}`);
-        }
-        break
-      case 2:
-      // 更新日志
-        router.pushUrl({
-          url: "pages/view/myCenter/aboutUs/versionLogPage"
-        })
+      // 仅打开应用市场查看更新，不将跳转结果当作版本检查结果。
+        this.openMarket()
         break
     }
   }

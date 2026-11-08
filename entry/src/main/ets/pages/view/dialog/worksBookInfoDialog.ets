@@ -4,7 +4,6 @@ import InsideCircleIcon from '../../../componets/common/InsideCircleIcon'
 import { buttonList } from '../../../componets/dataList/buttonList'
 import { WorksLists } from '../../../database/entities/WorksLists'
 import newBookShelf from '../bookShelf/Manage/bookManage/newBookShelf'
-import shareWorksBook from './shareWorksBook'
 
 @CustomDialog
 /**
@@ -16,7 +15,6 @@ export default struct worksBookInfoDialog{
   @Prop works:WorksLists
   @State buttonListInfo:buttonList[] = [
     new buttonList(1,'编辑',$r('app.media.edit')),
-    new buttonList(2,'分享',$r('app.media.icon_share')),
     new buttonList(3,'删除',$r('app.media.ic_public_delete'))
   ]
 
@@ -39,9 +37,6 @@ export default struct worksBookInfoDialog{
                 switch (item.id){
                   case 1:
                     this.isShowEditBook = true
-                    break
-                  case 2:
-                    this.shareShelfBookDialog?.open()
                     break
                   case 3:
                     this.delDialog?.open()
@@ -98,18 +93,6 @@ export default struct worksBookInfoDialog{
     }
     .backgroundColor(Color.White)
   }
-
-  //分享弹窗
-  shareShelfBookDialog: CustomDialogController | null = new CustomDialogController({
-    builder: shareWorksBook({
-      works:this.works
-    }),
-    autoCancel: true,
-    width:'100%',
-    height:'100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle:true
-  })
 
   //删除确认弹出框
   @State delCache:boolean = false

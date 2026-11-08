@@ -1,8 +1,7 @@
-import { hilog } from '@kit.PerformanceAnalysisKit';
+import Logger from '../../ets/common/utils/Logger';
 import { window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 
-const TAG = 'BrightnessUtil';
 
 /**
  * @author miniscale
@@ -34,7 +33,7 @@ export default class BrightnessUtil {
       const brightness = BrightnessUtil.brightnessMap.get(brightnessMapName)
       return brightness ?? -1
     } catch (err) {
-      hilog.error(0x0000, TAG, `Failed Get brightness, errorCode: ${err.code}`);
+      Logger.error('BrightnessUtil.getBrightness failed', Logger.errorSummary(err));
       return -1
     }
   }
@@ -49,7 +48,7 @@ export default class BrightnessUtil {
       BrightnessUtil.windowClass?.setWindowBrightness(brightness as number);
       BrightnessUtil.brightnessMap.set(brightnessMapName, brightness);
     } catch (err) {
-      hilog.error(0x0000, TAG, `Failed Set brightness, errorCode: ${err.code}`);
+      Logger.error('BrightnessUtil.setBrightness failed', Logger.errorSummary(err));
     }
   }
 
@@ -63,13 +62,12 @@ export default class BrightnessUtil {
       BrightnessUtil.windowClass?.setWindowKeepScreenOn(isKeepOn, (err: BusinessError) => {
         const errCode: number = err.code;
         if (errCode) {
-          hilog.error(0x0000, TAG, `Failed set window keep screen state, errorCode: ${err.code}`);
+          Logger.error('BrightnessUtil.setScreenState failed', Logger.errorSummary(err));
           return;
         }
-        hilog.info(0x0000, TAG, `Success set window keep screen state`);
       });
     } catch (err) {
-      hilog.error(0x0000, TAG, `Failed set window keep screen state, errorCode: ${err.code}`);
+      Logger.error('BrightnessUtil.setScreenState failed', Logger.errorSummary(err));
     }
   }
 }

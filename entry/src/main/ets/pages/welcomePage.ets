@@ -5,7 +5,6 @@ import { initAppData } from '../storage/appData';
 @Entry
 @Component
 struct Index {
-  @State name: string = '开源阅读'
   @State Tip: string = '享受阅读时光'
   onPageShow() {
     initAppData()
@@ -29,10 +28,9 @@ struct Index {
 
       Column() {
         Row() {
-          Text(this.name)
+          Text($r('app.string.EntryAbility_label'))
             .fontSize(45)
             .fontWeight(FontWeight.Bold)
-            .width(45)
           Text(this.Tip)
             .fontSize(20)
             .fontWeight(FontWeight.Normal)

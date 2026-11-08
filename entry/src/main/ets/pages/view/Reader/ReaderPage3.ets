@@ -1,9 +1,8 @@
 import { display, promptAction, router } from '@kit.ArkUI';
 import LayoutMoreDialog from '../../../componets/Reader/LayoutMoreDialog';
-import { MusicPlayer } from 'ets/componets/Reader/MusicPlayer';
 import { bookParser, readerCore, ReadPageComponent } from '@kit.ReaderKit';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
-import { hilog } from '@kit.PerformanceAnalysisKit';
+import Logger from '../../../common/utils/Logger';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ClickUtil, PreferencesUtil } from '@pura/harmony-utils';
 import { Books } from '../../../database/entities/Books';
@@ -44,7 +43,6 @@ struct ReaderPage3 {
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @State ReaderPadding: number = 24 // 边距
   @State isShowSetting: boolean = false
-  @State isShowListen: boolean = false
   @State isShowContentSetting: boolean = false
   @State isShowMoreLayout: boolean = false
   @State isShowFontPicker: boolean = false //字体选择面板
@@ -142,8 +140,7 @@ struct ReaderPage3 {
           if (this.pageActive && this.pageReady) this.refreshReaderAccess();
         }
         this.autoUnlock?.reconcile();
-        hilog.info(0x0000, 'ReaderAccess', 'Session changed, ownership=%{public}d generation=%{public}d',
-          this.ownership, privacySessionService.getGeneration());
+        Logger.debug('Reader session changed');
       });
       this.registerScreenDensityChange();
       this.registerListener();
@@ -162,7 +159,7 @@ struct ReaderPage3 {
         this.readerSetting = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
           this.readerSetting) as readerCore.ReaderSetting;
       } catch (_) {
-        hilog.warn(0x0000, 'ReaderAccess', 'Reader settings unavailable; using defaults');
+        Logger.warn('Reader settings unavailable; using defaults');
       }
       // 上次选择的字体文件可能已被清理：回退系统字体，避免按钮显示一个用不了的字体名
       this.normalizeRestoredFont();
@@ -181,7 +178,7 @@ struct ReaderPage3 {
       this.readerLoading = false;
       this.privacyError = '阅读页面初始化失败，请返回书架后重试';
       this.releaseReader();
-      hilog.error(0x0000, 'ReaderAccess', 'Reader page initialization failed');
+      Logger.error('Reader page initialization failed');
     }
   }
 
@@ -204,7 +201,7 @@ struct ReaderPage3 {
       this.privacyChecking = !this.accessFailed;
     }
     this.autoUnlock?.reconcile();
-    hilog.info(0x0000, 'ReaderAccess', 'Page hidden, ownership=%{public}d', this.ownership);
+    Logger.debug('Reader page hidden');
   }
 
   private getAccessRequestId(): number {
@@ -233,7 +230,7 @@ struct ReaderPage3 {
     this.bindReaderListener(runtime);
     this.syncFontResourceListener();
     this.readerRuntimes = [runtime];
-    hilog.info(0x0000, 'ReaderAccess', 'Reader instance created, instance=%{public}d', runtime.id);
+    Logger.debug('Reader instance created');
     return runtime;
   }
 
@@ -256,7 +253,6 @@ struct ReaderPage3 {
     if (!this.accessFailed) this.privacyError = '';
     this.isShowSetting = false;
     this.isShowCatalogDialog = false;
-    this.isShowListen = false;
     this.releaseReader();
     this.autoUnlock?.reconcile();
   }
@@ -283,8 +279,7 @@ struct ReaderPage3 {
       }
       this.ownership = BookAccessState.fromPrivate(required);
       this.privacyGeneration = generation;
-      hilog.info(0x0000, 'ReaderAccess', 'Ownership verified, ownership=%{public}d generation=%{public}d',
-        this.ownership, generation);
+      Logger.debug('Reader ownership verified');
       if (required && !privacySessionService.isUnlocked()) {
         this.coverPrivateReader();
         return false;
@@ -303,7 +298,7 @@ struct ReaderPage3 {
         this.privacyCovered = true;
         this.accessFailed = true;
         this.privacyError = '无法确认书籍访问权限，请重新检查或返回后重试';
-        hilog.error(0x0000, 'ReaderAccess', 'Book access check failed');
+        Logger.error('Reader book access check failed');
         this.releaseReader();
       }
       return false;
@@ -320,7 +315,7 @@ struct ReaderPage3 {
   private async unlockReader(): Promise<boolean> {
     if (this.privacyBusy) return false;
     this.privacyBusy = true;
-    hilog.info(0x0000, 'ReaderAccess', 'Automatic private book authentication started');
+    Logger.debug('Reader authentication started');
     try {
       return await privacySessionService.unlock(this.getUIContext());
     } finally {
@@ -349,21 +344,21 @@ struct ReaderPage3 {
       this.bookData.durChapterIndex = safeIndex;
       runtime.controller.registerBookParser(runtime.parser);
       runtime.controller.setPageConfig(this.readerSetting);
-      hilog.info(0x0000, 'ReaderAccess', 'Reader instance starting, instance=%{public}d', runtime.id);
+      Logger.debug('Reader instance starting');
       await runtime.scope.wait(runtime.controller.startPlay(safeIndex, domPos), 15000, '正文启动超时，请重试');
       if (!this.isCurrentRuntime(runtime)) return;
       await runtime.scope.wait(runtime.firstFrame, 10000, '正文显示超时，请重试');
       if (!this.isCurrentRuntime(runtime)) return;
       this.readerStarted = true;
       this.readerLoading = false;
-      hilog.info(0x0000, 'ReaderAccess', 'Reader first frame ready, instance=%{public}d', runtime.id);
+      Logger.debug('Reader first frame ready');
     } catch (err) {
       if (this.runtime === runtime && this.isCurrentAccessRequest(requestId, runtime.generation)) {
         const message = err instanceof Error ? err.message : '书籍加载失败';
         this.releaseReader();
         this.readerError = message;
         this.readerLoading = false;
-        hilog.error(0x0000, 'ReaderAccess', 'Reader instance load failed, instance=%{public}d', runtime.id);
+        Logger.error('Reader instance load failed', Logger.errorSummary(err));
       }
     } finally {
       if (this.runtime === runtime && !this.isCurrentRuntime(runtime)) this.releaseReader();
@@ -418,7 +413,6 @@ struct ReaderPage3 {
       }
       if (data.state !== readerCore.PageState.PAGE_ON_SHOW) return;
       runtime.frameShown();
-      hilog.info(0x0000, 'ReaderAccess', 'Reader page shown, instance=%{public}d', runtime.id);
       this.bookData.localBookDurChapterPos = data;
       // ReaderKit 的 resourceIndex 基于 spine，可能超出目录列表范围；
       // 只接受范围内的下标，避免越界值写入 bookData 并持久化
@@ -449,7 +443,7 @@ struct ReaderPage3 {
         try {
           this.readerComponentController?.setPageConfig(this.readerSetting);
         } catch (e) {
-          console.error('onWindowSizeChange, error ' + JSON.stringify(e));
+          Logger.error('Reader window size update failed', Logger.errorSummary(e));
         }
       }
     });
@@ -477,8 +471,7 @@ struct ReaderPage3 {
           readerCallback: (err: BusinessError, data: readerCore.ReaderComponentController) => {
             runtime.componentReady(err, data);
             if (this.runtime === runtime && runtime.scope.isActive()) {
-              hilog.info(0x0000, 'ReaderAccess', 'Reader component mounted, instance=%{public}d code=%{public}d',
-                runtime.id, err?.code ?? 0);
+              Logger.debug('Reader component mounted', '', err?.code ?? 0);
             }
           }
         }).width('100%').height('100%')
@@ -798,19 +791,6 @@ struct ReaderPage3 {
                 })
               }
 
-              //todo:听书功能开发
-              /*              GridItem() {
-                              Column() {
-                                Image($r("app.media.listen")).width(24)
-                                Text("听书")
-                              }
-                            }
-                            .bindContentCover($$this.isShowListen, this.BookListen(), {
-                              modalTransition: ModalTransition.DEFAULT, backgroundColor: "rgba(51, 106, 128, 0.75)"
-                            }).onClick(() => {
-                              this.isShowListen = true
-                            })*/
-
               GridItem() {
                 Column() {
                   Image(this.colorMode == 0 ? $r("app.media.day_icon") : $r("app.media.night_icon"))
@@ -989,11 +969,6 @@ struct ReaderPage3 {
   }
 
   @Builder
-  BookListen() {
-    MusicPlayer({ WidthMinus: 118, isShowListen: this.isShowListen }).width("100%").height("100%")
-  }
-
-  @Builder
   LayoutMoreDialog() {
     LayoutMoreDialog({ ReaderPadding: this.ReaderPadding }).height(500).width("100%")
   }
@@ -1025,7 +1000,7 @@ struct ReaderPage3 {
       this.fontOptions = options
       this.isShowFontPicker = true
     }).catch((error: BusinessError) => {
-      hilog.error(0x0000, 'ReaderFont', 'list fonts failed: %{public}s', JSON.stringify(error));
+      Logger.error('Reader list fonts failed', Logger.errorSummary(error));
       promptAction.showToast({ message: '字体加载失败' })
     })
   }
@@ -1071,7 +1046,7 @@ struct ReaderPage3 {
       return;
     }
     if (!ReaderFontManager.isFontAvailable(path)) {
-      hilog.warn(0x0000, 'ReaderFont', 'restored font missing: %{public}s, fallback to system', path);
+      Logger.warn('Reader restored font missing; fallback to system');
       this.readerSetting.fontName = SYSTEM_FONT_NAME;
       this.readerSetting.fontPath = '';
       return;
@@ -1092,7 +1067,7 @@ struct ReaderPage3 {
       }
       return this.importFontUris(context, uris)
     }).catch((error: BusinessError) => {
-      hilog.error(0x0000, 'ReaderFont', 'pick fonts failed: %{public}s', JSON.stringify(error));
+      Logger.error('Reader pick fonts failed', Logger.errorSummary(error));
       this.isImportingFont = false
       promptAction.showToast({ message: '字体导入失败' })
     })
@@ -1111,8 +1086,7 @@ struct ReaderPage3 {
         successCount++;
       } catch (error) {
         failCount++;
-        hilog.error(0x0000, 'ReaderFont', 'import font[%{public}d] failed: %{public}s',
-          index, JSON.stringify(error));
+        Logger.error('Reader import font failed', Logger.errorSummary(error), index);
       }
     }
     this.isImportingFont = false
@@ -1120,7 +1094,7 @@ struct ReaderPage3 {
       try {
         this.fontOptions = await ReaderFontManager.listFontOptions(context);
       } catch (error) {
-        hilog.error(0x0000, 'ReaderFont', 'refresh fonts failed: %{public}s', JSON.stringify(error));
+        Logger.error('Reader refresh fonts failed', Logger.errorSummary(error));
       }
     }
     if (replacedCurrentFont && replacedCurrentFont.path === this.readerSetting.fontPath &&
@@ -1144,7 +1118,7 @@ struct ReaderPage3 {
         });
         this.selectFont(replacedCurrentFont);
       } catch (error) {
-        hilog.error(0x0000, 'ReaderFont', 'reload imported font failed: %{public}s', JSON.stringify(error));
+        Logger.error('Reader reload imported font failed', Logger.errorSummary(error));
         promptAction.showToast({ message: '字体已导入，刷新失败，请重新打开书籍' })
         return
       }
@@ -1167,7 +1141,7 @@ struct ReaderPage3 {
     ReaderFontManager.listFontOptions(context).then((options: ReaderFontOption[]) => {
       this.fontOptions = options
     }).catch((error: BusinessError) => {
-      hilog.error(0x0000, 'ReaderFont', 'refresh fonts failed: %{public}s', JSON.stringify(error));
+      Logger.error('Reader refresh fonts failed', Logger.errorSummary(error));
     })
     if (wasCurrent) {
       // 删除的是使用中的字体，回退到系统字体
@@ -1235,16 +1209,13 @@ struct ReaderPage3 {
 
     // 如果找到了匹配的章节位置信息，则返回第一个匹配的章节位置信息
     if (resourceItemArr.length > 0) {
-      hilog.info(0x0000, 'testTag', 'getResourceItemByCatalog get resource ', resourceItemArr[0]);
       let resourceItem = resourceItemArr[0];
       return resourceItem;
       // 如果没有找到匹配的章节位置信息，但书脊内容列表有项，则返回书脊内容列表的第一项
     } else if (spineList.length > 0) {
-      hilog.info(0x0000, 'testTag', 'getResourceItemByCatalog get resource in resourceList', spineList[0]);
       return spineList[0];
       // 如果书脊内容列表为空，则返回一个空的章节位置信息对象
     } else {
-      hilog.info(0x0000, 'testTag', 'getResourceItemByCatalog get resource in escape');
       return {
         idRef: '',
         index: 0,

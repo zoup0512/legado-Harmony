@@ -42,7 +42,6 @@ export default struct BookInfoGrids{
   })
 
   onCancel() {
-    console.info('取消')
   }
 
   onAccept() {
@@ -50,7 +49,6 @@ export default struct BookInfoGrids{
   }
 
   exitApp() {
-    console.info('点外围取消')
   }
 
 

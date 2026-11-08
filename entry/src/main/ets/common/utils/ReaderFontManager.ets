@@ -1,9 +1,9 @@
+import Logger from './Logger';
 import fs from '@ohos.file.fs';
 import { common } from '@kit.AbilityKit';
 import { hash, picker } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { font } from '@kit.ArkUI';
-import { hilog } from '@kit.PerformanceAnalysisKit';
 import { READER_BUILTIN_FONT_FILE_NAME, ReaderFontImportFiles, ReaderFontLogic } from './ReaderFontLogic';
 
 /** 阅读器可选字体 */
@@ -16,7 +16,6 @@ export class ReaderFontOption {
   contentHash: string = '';
 }
 
-const TAG = 'ReaderFont';
 export const SYSTEM_FONT_NAME: string = '系统字体';
 export const BUILTIN_FONT_NAME: string = '钉钉进步体';
 const FONT_SUFFIX_FILTERS: string[] = ['.ttf', '.otf'];
@@ -55,7 +54,7 @@ class NativeReaderFontImportFiles implements ReaderFontImportFiles {
         fs.unlinkSync(path);
       }
     } catch (error) {
-      hilog.warn(0x0000, TAG, 'cleanup font temporary file failed: %{public}s', JSON.stringify(error));
+      Logger.warn('ReaderFontManager.removeTemporary warning', Logger.errorSummary(error));
     }
   }
 }
@@ -116,7 +115,7 @@ export class ReaderFontManager {
       builtin.contentHash = await hash.hash(builtinPath, 'sha256');
       options.push(builtin);
     } catch (error) {
-      hilog.error(0x0000, TAG, 'ensureBuiltinFont failed: %{public}s', JSON.stringify(error));
+      Logger.error('ReaderFontManager.listFontOptions failed', Logger.errorSummary(error));
     }
     const dir = ReaderFontManager.fontsDir(context);
     if (fs.accessSync(dir)) {
@@ -137,7 +136,7 @@ export class ReaderFontManager {
           option.contentHash = await hash.hash(path, 'sha256');
           options.push(option);
         } catch (error) {
-          hilog.warn(0x0000, TAG, 'inspect font failed: %{public}s', JSON.stringify(error));
+          Logger.warn('ReaderFontManager.listFontOptions warning', Logger.errorSummary(error));
         }
       }
     }
@@ -152,7 +151,7 @@ export class ReaderFontManager {
       const documentPicker = new picker.DocumentViewPicker(context);
       return await documentPicker.select(options);
     } catch (error) {
-      hilog.error(0x0000, TAG, 'pick font cancelled or failed: %{public}s', JSON.stringify(error));
+      Logger.error('ReaderFontManager.pickFontUris failed', Logger.errorSummary(error));
       return [];
     }
   }
@@ -185,7 +184,6 @@ export class ReaderFontManager {
       option.name = ReaderFontManager.baseName(originalName);
       option.path = finalPath;
       option.contentHash = contentHash;
-      hilog.info(0x0000, TAG, 'font imported size=%{public}d', sourceStat.size);
       return option;
     } finally {
       if (source) {
@@ -211,7 +209,7 @@ export class ReaderFontManager {
       ReaderFontManager.fontBufferCache.delete(option.path);
       return true;
     } catch (error) {
-      hilog.error(0x0000, TAG, 'delete font failed: %{public}s', JSON.stringify(error));
+      Logger.error('ReaderFontManager.deleteFont failed', Logger.errorSummary(error));
       return false;
     }
   }
@@ -239,7 +237,7 @@ export class ReaderFontManager {
     try {
       return ReaderFontManager.readFontBuffer(selectedPath);
     } catch (error) {
-      hilog.warn(0x0000, TAG, 'read selected font failed: %{public}s', JSON.stringify(error));
+      Logger.warn('ReaderFontManager.serveFontResource warning', Logger.errorSummary(error));
       return new ArrayBuffer(0);
     }
   }
@@ -274,7 +272,7 @@ export class ReaderFontManager {
       ReaderFontManager.registeredPreviewFamilies.add(familyName);
       return familyName;
     } catch (error) {
-      hilog.warn(0x0000, TAG, 'register preview failed: %{public}s', JSON.stringify(error));
+      Logger.warn('ReaderFontManager.registerFontForPreview warning', Logger.errorSummary(error));
       return '';
     }
   }

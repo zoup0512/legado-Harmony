@@ -1,3 +1,4 @@
+import Logger from './Logger';
 /**
  * @author 2008
  * @datetime 2024/7/26 10:58
@@ -67,7 +68,7 @@ class bookGroupUtils{
       BookGroupsDao.updateAddBookIds(newGroup, booksInGroup.map(val => val.toString()))
 
     } catch (e) {
-      console.log('moveBookByGroupId, Error, ', JSON.stringify(e));
+      Logger.error('bookGroupUtils.moveBookByGroupId failed', Logger.errorSummary(e));
     }
   }
 

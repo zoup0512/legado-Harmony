@@ -6,9 +6,6 @@
     "mainElement": "EntryAbility",
     "requestPermissions":[
       {
-        "name": "ohos.permission.PRIVACY_WINDOW"
-      },
-      {
         "name" : "ohos.permission.ACCESS_BIOMETRIC",
         "usedScene": {
           "when":"inuse"
@@ -16,8 +13,7 @@
       }
     ],
     "deviceTypes": [
-      "phone",
-      "tablet"
+      "phone"
     ],
     "deliveryWithInstall": true,
     "installationFree": false,

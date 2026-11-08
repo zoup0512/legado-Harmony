@@ -12,7 +12,6 @@ import BooksDao from '../../../../../database/dao/BooksDao'
 import { Books } from '../../../../../database/entities/Books'
 import { WorksBookList } from '../../../../../database/entities/WorksBookList'
 import { WorksLists, WORK_BOOK_LIST_STATUS } from '../../../../../database/entities/WorksLists'
-import shareWorksBook from '../../../dialog/shareWorksBook'
 import newAddShelf from './newAddShelf'
 import { LocalBookAccessLogic } from '../../../../../common/utils/LocalBookAccess'
 import { getPrivacyGeneration } from '../../../../../privacy/PrivacyAccessGuard'
@@ -41,7 +40,6 @@ export default struct newBookShelf{
     this.active = false
     this.loadRequestId++
     this.addBooksList = []
-    this.shareShelfBookDialog?.close()
   }
 
   changeShowNumber:Function = (_index:number)=>{
@@ -187,10 +185,6 @@ export default struct newBookShelf{
             Image($r('app.media.edit_black')).width(25)
               .onClick(()=>{
                 this.workBookListStatus = 2
-              })
-            Image($r('app.media.edit_share')).width(25)
-              .onClick(()=>{
-                this.shareShelfBookDialog?.open()
               })
           }
           .visibility(this.workBookListStatus === 1?Visibility.Visible:Visibility.None)
@@ -486,15 +480,4 @@ export default struct newBookShelf{
       worksBookList:[]
     }
   }
-
-  shareShelfBookDialog: CustomDialogController | null = new CustomDialogController({
-    builder: shareWorksBook({
-      works:this.workBookList
-    }),
-    autoCancel: true,
-    width:'100%',
-    height:'100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle:true
-  })
 }

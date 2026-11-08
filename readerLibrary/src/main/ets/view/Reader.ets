@@ -1,3 +1,4 @@
+import Logger from '../utils/Logger';
 import { Constants, FlipPageType } from '../common/constants/Constants'
 import battery from './battery';
 import { common2D, drawing } from '@kit.ArkGraphics2D';
@@ -27,7 +28,6 @@ export struct Reader {
         .lineHeight(this.fontSize * this.lineHeightRatio)// todo:copyOption会跟外部的Click有冲突，本身会消费掉所有的click事件不留给外部，待解决
           // .copyOption(CopyOptions.LocalDevice)
           // .onTextSelectionChange((selectionStart: number, selectionEnd: number) => {
-          //   console.info(`文本选中区域变化回调, selectionStart: ${selectionStart}, selectionEnd: ${selectionEnd}`);
           // })
         .width("100%")
         .layoutWeight(1)
@@ -39,7 +39,6 @@ export struct Reader {
               this.displaySize = [width, height];
             }
           }
-          console.info(`display size, width : ${vp2px(newSize.width as number)} , height : ${vp2px(newSize.height as number)}`)
         })
 
       if (this.turnStyle !== FlipPageType.UP_DOWN_FLIP_PAGE) {
@@ -91,7 +90,7 @@ export struct ReaderForCurlView {
           this.batteryPixelMap = pixmap
         }
       }).catch((err: Error) => {
-      console.log("error: " + err)
+      Logger.error('Reader.getPixelMap failed', Logger.errorSummary(err))
     })
   }
 
@@ -107,7 +106,6 @@ export struct ReaderForCurlView {
         .lineHeight(this.fontSize * this.lineHeightRatio)// todo:copyOption会跟外部的Click有冲突，本身会消费掉所有的click事件不留给外部，待解决
           // .copyOption(CopyOptions.LocalDevice)
           // .onTextSelectionChange((selectionStart: number, selectionEnd: number) => {
-          //   console.info(`文本选中区域变化回调, selectionStart: ${selectionStart}, selectionEnd: ${selectionEnd}`);
           // })
         .width("100%")
         .layoutWeight(1)
@@ -119,7 +117,6 @@ export struct ReaderForCurlView {
               this.displaySize = [width, height];
             }
           }
-          console.info(`display size, width : ${vp2px(newSize.width as number)} , height : ${vp2px(newSize.height as number)}`)
           if (this.batteryPixelMap === null) {
             this.getPixelMap();
           }
@@ -748,7 +745,6 @@ class SimulationCornerTurnDrawHelper extends SimulationDrawHelper {
 
     this.touch.y = (this.lastTouchOffset?.y ?? 0) + this.cornerY - (this.lastTouchOffset?.y ?? 0) * Math.abs(process);
 
-    console.info(`animation: mTouch is x:${this.touch.x},y:${this.touch.y}, process is ${process}`)
 
     this.calBezierPoint();
   }
@@ -756,7 +752,6 @@ class SimulationCornerTurnDrawHelper extends SimulationDrawHelper {
   draw(canvas: drawing.Canvas): void {
     if (canIUse('SystemCapability.Graphics.Drawing')) {
 
-      let startTime = Date.now();
       try {
         this.calPath();
         let color: common2D.Color = {
@@ -766,12 +761,10 @@ class SimulationCornerTurnDrawHelper extends SimulationDrawHelper {
           blue: 0
         }
         canvas.drawColor(color, drawing.BlendMode.CLEAR);
-        console.info('draw called')
         this.drawCurrentPageArea(canvas);
         this.drawNextPageArea(canvas);
         this.drawCurrentTurningPage(canvas)
 
-        let endTime = Date.now();
 
         let shadowBrush = new drawing.Brush();
         let maskFilter = drawing.MaskFilter.createBlurMaskFilter(drawing.BlurType.OUTER, 50);
@@ -781,10 +774,9 @@ class SimulationCornerTurnDrawHelper extends SimulationDrawHelper {
         canvas.drawPath(this.nextPagePath);
         canvas.detachBrush()
 
-        console.log(`绘制耗时：${endTime - startTime}`)
 
       } catch (e) {
-        console.error(`绘制出错：${e}`)
+        Logger.error('Reader.draw failed', Logger.errorSummary(e))
       }
     }
   }
@@ -1066,7 +1058,6 @@ class SimulationPageTurnDrawHelper extends SimulationDrawHelper {
       Math.abs(process),
       this.canvasSize.width);
 
-    console.info(`animation: mTouch is x:${this.touch.x},y:${this.touch.y}, process is ${process}`)
   }
 
   reset(): void {

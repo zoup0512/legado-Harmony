@@ -19,7 +19,6 @@ import { PageAccessRefresh } from '../../privacy/PageAccessRefresh'
 import { BookAccessState, BookOwnership } from '../../privacy/BookAccessState'
 import privacyForeground from '../../privacy/PrivacyForeground'
 import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../privacy/PrivateBookAutoUnlock'
-import { hilog } from '@kit.PerformanceAnalysisKit'
 
 /**
  * 标题图片样式
@@ -173,9 +172,6 @@ struct BookDetailPage {
   }
 
   private logAccessLifecycle(event: string) {
-    hilog.info(0x0000, 'BookDetailAccess',
-      '%{public}s ownership=%{public}d generation=%{public}d verified=%{public}d request=%{public}d',
-      event, this.ownership, privacySessionService.getGeneration(), this.privacyGeneration, this.getAccessRequestId())
   }
 
   private invalidateDetailAccess(lockPrivate: boolean) {

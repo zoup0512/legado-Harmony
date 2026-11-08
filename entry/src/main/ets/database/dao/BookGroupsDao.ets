@@ -1,3 +1,4 @@
+import Logger from '../../common/utils/Logger';
 /**
  * @author 2008
  * @datetime 2024/7/24 21:16
@@ -23,7 +24,7 @@ class BookGroupsDao{
       await AppDatabaseUtil.existsTable(this.TABLE_NAME)
       this.initGroupData()
     } catch (err) {
-      console.info('TagInfo', JSON.stringify(err))
+      Logger.error('BookGroupsDao.initGroupTable failed', Logger.errorSummary(err))
     }
 
   }
@@ -51,10 +52,9 @@ class BookGroupsDao{
 `;
       const groupDbList = await DbUtil.querySqlForList<BookGroupDb>(sql, column);
       const groupList = groupDbList.map((item): BookGroups => ToBookGroups(item));
-      console.log("TagInfo", '书籍：' + groupDbList.length)
       return groupList
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('BookGroupsDao.search failed', Logger.errorSummary(err))
       return []
     }
   }
@@ -85,10 +85,9 @@ class BookGroupsDao{
 `;
       const groupDbList = await DbUtil.querySqlForList<BookGroupDb>(sql, column);
       const groupList = groupDbList.map((item): BookGroups => ToBookGroups(item));
-      console.log("TagInfo", '书籍：' + groupList.length)
       return groupList
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('BookGroupsDao.searchHide failed', Logger.errorSummary(err))
       return []
     }
   }
@@ -102,7 +101,7 @@ class BookGroupsDao{
       }
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookGroupsDao.batchInsert failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -122,10 +121,9 @@ class BookGroupsDao{
       const bookGroupsDb = ToBookGroupsDb(group)
       bookGroupsDb.createTime = Date.now()
       await DbUtil.insert(this.TABLE_NAME, bookGroupsDb, column)
-      console.log('TagInfo', '创建成功')
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookGroupsDao.insert failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -145,7 +143,7 @@ class BookGroupsDao{
       await DbUtil.update(predicates, bookGroupsDb, column)
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookGroupsDao.update failed', Logger.errorSummary(err))
       return false
     }
 
@@ -159,7 +157,7 @@ class BookGroupsDao{
       await DbUtil.delete(predicates)
       return true
     }  catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookGroupsDao.deleteBook failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -181,7 +179,7 @@ class BookGroupsDao{
       }
       return false
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookGroupsDao.isUpdateGroupTop failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -200,7 +198,7 @@ class BookGroupsDao{
           this.update(item)
         })
     } catch (e){
-      console.log('TagInfo, Error, ', JSON.stringify(e))
+      Logger.error('BookGroupsDao.updateGroupShow failed', Logger.errorSummary(e))
     }
   }
 
@@ -225,7 +223,7 @@ class BookGroupsDao{
           await bookGroupsDao.insert(group)
       }
     }catch (e){
-      console.log('TagInfo, Error, ', JSON.stringify(e))
+      Logger.error('BookGroupsDao.initGroupData failed', Logger.errorSummary(e))
     }
   }
   //根据分组groupId更新bookIds书籍id存在不做更新
@@ -250,11 +248,10 @@ class BookGroupsDao{
             }
           })
           this.update(groupList)
-          console.log("TagInfo", '书籍bookIds：' + groupList.bookIds?.length + JSON.stringify(groupList.bookIds))
         })
       })
     } catch (e){
-      console.log('TagInfo, Error, ', JSON.stringify(e))
+      Logger.error('BookGroupsDao.updateAddBookIds failed', Logger.errorSummary(e))
     }
   }
   //同时在更新后将旧的分组的bookIds中的书籍id移除
@@ -285,7 +282,7 @@ class BookGroupsDao{
         }
       }
     } catch (e) {
-      console.log('updateMoveBookIdsByGroupId, Error, ', JSON.stringify(e));
+      Logger.error('BookGroupsDao.updateMoveBookIdsByGroupId failed', Logger.errorSummary(e));
     }
   }
 
@@ -307,7 +304,7 @@ class BookGroupsDao{
         }
       }
     } catch (e) {
-      console.log('updateMoveBookIdsByGroupId, Error, ', JSON.stringify(e));
+      Logger.error('BookGroupsDao.updateMoveGroupBookIds failed', Logger.errorSummary(e));
     }
   }
   //校验唯一性,同时进行更新
@@ -331,7 +328,7 @@ class BookGroupsDao{
       }
       return false
     } catch (e){
-      console.log('onlyGroupName, Error, ', JSON.stringify(e))
+      Logger.error('BookGroupsDao.onlyGroupUpdateName failed', Logger.errorSummary(e))
       return false
     }
   }
@@ -358,14 +355,13 @@ class BookGroupsDao{
       }
       return bookIds
     } catch (e){
-      console.log('queryBookByGroup, Error, ', JSON.stringify(e))
+      Logger.error('BookGroupsDao.queryBookByGroup failed', Logger.errorSummary(e))
       return []
     }
   }
 
   async updatePartialGroup(group: BookGroups) {
     // if (!(group instanceof BookGroups)) {
-    //   console.warn('Invalid group instance.');
     //   return;
     // }
 
@@ -378,10 +374,10 @@ class BookGroupsDao{
       if (count > 0) {
         await DbUtil.update(predicates, ToBookGroupsDb(group), column);
       } else {
-        console.warn('No records found for update.');
+        Logger.warn('BookGroupsDao.updatePartialGroup found no records');
       }
     } catch (err) {
-      console.error('Error in partialUpdate:', err);
+      Logger.error('BookGroupsDao.updatePartialGroup failed', Logger.errorSummary(err));
     }
   }
 

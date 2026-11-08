@@ -58,7 +58,6 @@
 //     } else if (this.currentStartIndex > 0) {
 //       this.currentPageNum = 2;
 //     } else {
-//       console.info('currentStartIndex = ' + this.currentStartIndex);
 //     }
 //     this.isFontChanged = true;
 //     this.simulatePageContent();
@@ -79,13 +78,11 @@
 //         data.setWindowSystemBarProperties(SystemBarProperties, (err: BusinessError) => {
 //           const errCode: number = err.code;
 //           if (errCode) {
-//             console.error('Failed to set the system bar properties. Cause: ' + JSON.stringify(err));
 //             return;
 //           }
 //           data.setWindowBackgroundColor(BG_COLOR_ARRAY[this.bgColorIndex]);
 //         });
 //       } catch (exception) {
-//         console.error('Failed to set the system bar properties. Cause: ' + JSON.stringify(exception));
 //       }
 //     });
 //   }
@@ -95,7 +92,6 @@
 //   }
 //
 //   onFlush() {
-//     console.info('currentPageNum=' + this.currentPageNum + ', isFontChanged=' + this.isFontChanged);
 //     if (this.isFontChanged && this.currentPageNum === 1) {
 //       this.isFontChanged = false;
 //       this.currentStartIndex = 0;
@@ -165,7 +161,6 @@
 //             this.currentPageNum += 1;
 //             this.currentStartIndex += this.sumRow * this.rowWord;
 //           }
-//           console.info(this.currentStartIndex.toString());
 //           this.offsetX = 0;
 //           this.simulatePageContent();
 //         }

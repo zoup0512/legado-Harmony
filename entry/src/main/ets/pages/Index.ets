@@ -1,10 +1,10 @@
+import Logger from '../common/utils/Logger';
 import { showMessage } from '../componets/common/promptShow'
 import ReadShow from '../componets/common/ReadShow'
 import { NavItem } from '../componets/dataList/type'
 import { updateAppData } from '../storage/appData'
 import BookShelf from './view/BookShelf'
 import MyCenter from './view/myCenter/MyCenter'
-import { testGetColorFunction } from '@ohos/colorLibrary'
 import { emitter } from '@kit.BasicServicesKit'
 import { JSON } from '@kit.ArkTS'
 import { image } from '@kit.ImageKit'
@@ -41,7 +41,6 @@ struct Main {
       this.showReadShow = false
       this.isShow = false
     }, 5000)
-    console.debug('res1', this.bottomRectHeight)
   }
 
   screenShot() {
@@ -50,7 +49,7 @@ struct Main {
     this.tabController.changeIndex(0)
     this.getUIContext().getComponentSnapshot().get('main', ((err: Error, pixmap: image.PixelMap) => {
       if (err) {
-        console.log("error: " + JSON.stringify(err))
+        Logger.error('Index.screenShot failed', Logger.errorSummary(err))
         return
       }
       AppStorage.setOrCreate('screen_shot', pixmap)
@@ -66,8 +65,6 @@ struct Main {
     emitter.on('screen_shot', () => {
       this.screenShot()
     })
-    //测试颜色模块
-    testGetColorFunction();
   }
 
   @Builder

@@ -1,10 +1,9 @@
+import Logger from '../common/utils/Logger';
 import { window } from '@kit.ArkUI';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { display } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { hilog } from '@kit.PerformanceAnalysisKit';
 
-const TAG = 'WindowAbility';
 
 export class WindowAbility {
   private static readonly INSTANCE: WindowAbility = new WindowAbility();
@@ -38,7 +37,6 @@ export class WindowAbility {
    * @returns void
    */
   async initAvoidArea(mainWindow: window.Window): Promise<void> {
-    hilog.info(0x0000, TAG, 'initAvoidArea start');
     // Initialize default values
     AppStorage.setOrCreate<number>('statusBarHeight', 36);
     AppStorage.setOrCreate<number>('navigationAiBarHeight', 28);
@@ -48,7 +46,6 @@ export class WindowAbility {
     const navArea: window.AvoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
     if (systemArea) {
       const statusBarHeight = systemArea.topRect.height / scaledDensity;
-      hilog.info(0x0000, TAG, "initAvoidArea statusBarHeight: " + statusBarHeight);
       AppStorage.setOrCreate<number>('statusBarHeight', statusBarHeight);
 
       if (deviceInfo.deviceType === 'tablet') {
@@ -61,7 +58,6 @@ export class WindowAbility {
     }
     if (navArea) {
       const navigationAiBarHeight = navArea.bottomRect.height / scaledDensity;
-      hilog.info(0x0000, TAG, "initAvoidArea navigationAiBarHeight: " + navigationAiBarHeight);
       AppStorage.setOrCreate<number>('navigationAiBarHeight', navigationAiBarHeight);
 
       if (deviceInfo.deviceType === 'tablet') {
@@ -72,13 +68,12 @@ export class WindowAbility {
         AppStorage.setOrCreate<number>("NavigationBarHeight", navArea.bottomRect.height);
       }
     }
-    hilog.info(0x0000, TAG, 'initAvoidArea end');
   }
 
   initWindowSize(): void {
     window.getLastWindow(this.context, (err, windowClass) => {
       if (err.code) {
-        hilog.error(0x0000, TAG, 'setWindowWidth getLastWindow failed, error is: ' + JSON.stringify(err));
+        Logger.error('WindowAbility.initWindowSize failed', Logger.errorSummary(err));
         return;
       }
       let windowProperty = windowClass.getWindowProperties();
@@ -97,7 +92,6 @@ export class WindowAbility {
     }
     this.windowClass.on('windowStatusChange', (type: window.WindowStatusType) => {
       this.windowType = type;
-      hilog.info(0x0000, TAG, 'onWindowStatusChange type: ', JSON.stringify(type));
       this.initAvoidArea(this.windowClass!);
       if (type === window.WindowStatusType.FLOATING) {
         AppStorage.setOrCreate<number>("NavigationBarHeight", 0);
@@ -123,7 +117,6 @@ export class WindowAbility {
       return;
     }
     const nav: window.AvoidArea = this.windowClass.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
-    hilog.info(0x0000, TAG, 'setNavigationBar avoidArea: ', JSON.stringify(nav));
     if (nav) {
       AppStorage.setOrCreate<number>("NavigationBarHeight", nav.bottomRect.height);
     }
@@ -144,27 +137,23 @@ export class WindowAbility {
     }
     try {
       this.windowClass.on('windowSizeChange', (size) => {
-        hilog.info(0x0000, TAG,
-          'onWindowSizeChange windowSizeChange size is: ' + JSON.stringify(size));
         AppStorage.setOrCreate<number>('windowWidth', size.width);
         AppStorage.setOrCreate<number>('windowHeight', size.height);
         callback && callback();
       });
     } catch (exception) {
-      hilog.error(0x0000, TAG,
-        'onWindowSizeChange failed, error is ' + JSON.stringify(exception));
+      Logger.error('WindowAbility.onWindowSizeChange failed', Logger.errorSummary(exception));
     }
   }
 
   setOrientation(windowStage: window.WindowStage, orientation: window.Orientation): void {
     windowStage.getMainWindow().then((win) => {
       win.setPreferredOrientation(orientation).then((data) => {
-        hilog.info(0x0000, TAG, 'setOrientation succeeded, error is: ' + JSON.stringify(data));
       }).catch((err: Error) => {
-        hilog.error(0x0000, TAG, 'setOrientation setPreferredOrientation failed. error is: ' + JSON.stringify(err));
+        Logger.error('WindowAbility.setOrientation failed', Logger.errorSummary(err));
       });
     }).catch((err: Error) => {
-      hilog.error(0x0000, TAG, 'setOrientation getMainWindow failed, error is ' + JSON.stringify(err));
+      Logger.error('WindowAbility.setOrientation failed', Logger.errorSummary(err));
     });
   }
 
@@ -185,20 +174,16 @@ export class WindowAbility {
           AppStorage.setOrCreate('Grid.tabPro.enableAvoidAreaListener', false);
         }
         windowClass.setWindowSystemBarEnable(names).then(() => {
-          hilog.info(0x0000, TAG, 'toggleWindowSystemBar setWindowSystemBarEnable succeeded');
         }, (error: Error) => {
           if (error) {
-            hilog.error(0x0000, TAG,
-              'toggleWindowSystemBar setWindowSystemBarEnable failed, error is:' + JSON.stringify(error));
+            Logger.error('WindowAbility.toggleWindowSystemBar failed', Logger.errorSummary(error));
           }
         })
         if (names.length > 0) {
           AppStorage.setOrCreate('Grid.tabPro.enableAvoidAreaListener', true);
         }
-        hilog.info(0x0000, TAG, 'toggleWindowSystemBar Succeeded in setting the system bar to be invisible.');
       } catch (exception) {
-        hilog.error(0x0000, TAG,
-          'toggleWindowSystemBar Failed to set the system bar to be invisible. Cause:' + JSON.stringify(exception));
+        Logger.error('WindowAbility.toggleWindowSystemBar failed', Logger.errorSummary(exception));
       }
     });
   }

@@ -135,8 +135,6 @@ export struct TxtContentHandler {
         this.ShowHeight = Number(newValue.height)
         this.ShowWidth = Number(newValue.width)
         this.scheduleReflow()
-        console.log('ShowHeight:' + this.ShowHeight)
-        console.log('ShowWidth:' + this.ShowWidth)
       })
       .gesture(
         PanGesture(this.panOption)
@@ -148,15 +146,12 @@ export struct TxtContentHandler {
             this.drawPage();
           })
           .onActionEnd((event: GestureEvent) => {
-            console.log('currentPage:' + this.currentPage)
             if (event.offsetX > 200 && this.currentPage > 0) {
               this.currentPage--;
-              console.log('prevPage')
               this.offsetX = 0
               this.drawPage();
             } else if (event.offsetX < -200 && this.currentPage + 1 < this.GetTotalPages()) {
               this.currentPage++;
-              console.log('nextPage')
               this.offsetX = 0
               this.drawPage();
             } else {

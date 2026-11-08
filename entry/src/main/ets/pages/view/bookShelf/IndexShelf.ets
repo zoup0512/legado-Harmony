@@ -44,7 +44,6 @@ export default struct IndexShelf {
               BookMark({ title: '小说', index: 0, currentIndex: this.currentIndex }).onClick(() => {
                 this.currentIndex = 0
                 this.tabsController.changeIndex(0)
-                console.log(this.currentIndex + '')
               })
             }
 
@@ -52,7 +51,6 @@ export default struct IndexShelf {
               BookMark({ title: '漫画', index: 1, currentIndex: this.currentIndex }).onClick(() => {
                 this.currentIndex = 1
                 this.tabsController.changeIndex(1)
-                console.log(this.currentIndex + '')
               })
             }
 
@@ -60,7 +58,6 @@ export default struct IndexShelf {
               BookMark({ title: '有声书', index: 2, currentIndex: this.currentIndex }).onClick(() => {
                 this.currentIndex = 2
                 this.tabsController.changeIndex(2)
-                console.log(this.currentIndex + '')
               })
             }
           }
@@ -108,7 +105,6 @@ export default struct IndexShelf {
       .barHeight(0)
       .onChange((index) => {
         this.tabsController.changeIndex(index)
-        console.log('index:' + index)
         this.currentIndex = index
       })
       .backgroundColor(Color.White)

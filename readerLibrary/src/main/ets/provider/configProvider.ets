@@ -1,3 +1,4 @@
+import Logger from '../utils/Logger';
 import { BGColorType, BG_COLOR_ARRAY, Constants, FlipPageType } from '../common/constants/Constants';
 import { ReaderChapterItem, ReaderChapterPageItem } from '../common/entity/ReaderChaptersItem';
 import { NovelContentParseHelper } from '../common/helper/NovelContentParseHelper';
@@ -43,7 +44,7 @@ async function calChapterContent(width: number, height: number, targetParagraphL
       fontSize,
       fontSize * lineHeightRatio, width, height)
   } catch (e) {
-    console.info('loadNovel 出错 ' + e)
+    Logger.error('configProvider.calChapterContent failed', Logger.errorSummary(e))
     return [];
   }
 

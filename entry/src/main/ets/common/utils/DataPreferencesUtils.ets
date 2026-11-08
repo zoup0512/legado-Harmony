@@ -19,7 +19,6 @@ export default class bookDataPreferences {
     if (!this.preferences) {
       this.initPreferences();
     }
-    console.log('setinitPreferences', key, value)
     this.preferences?.putSync(key, value);
     this.preferences?.flush();
   }

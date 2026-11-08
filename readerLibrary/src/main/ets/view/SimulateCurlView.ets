@@ -1,3 +1,4 @@
+import Logger from '../utils/Logger';
 import { common2D, drawing } from '@kit.ArkGraphics2D';
 import animator, { AnimatorOptions, AnimatorResult } from '@ohos.animator';
 import { Constants } from '../common/constants/Constants';
@@ -17,7 +18,6 @@ export struct SimulateCurlView {
   private isOnAnimation: boolean = false;
   private isReady = false
   controller: TextController = new TextController();
-  private lastTime: number | null = null
   private animatorResult: AnimatorResult | undefined | null
   @Consume('screenW') screenW: number;
   @Link currentPageIndex: number;
@@ -62,7 +62,6 @@ export struct SimulateCurlView {
     };
     this.animatorResult = animator.create(options)
     this.animatorResult.onFinish = () => {
-      console.info(`animation: onFinish callback time is ${Date.now()}`)
       this.isOnAnimation = false;
       if (this.drawManager !== null) {
         this.drawManager.dispatchPointerUPEvent();
@@ -90,7 +89,6 @@ export struct SimulateCurlView {
       this.calPageIndex();
     }
     this.animatorResult.onFrame = (progress) => {
-      console.info(`animation: onFrame callback time is ${Date.now()} , progress : ${progress}}`)
       if (this.drawManager !== null) {
         this.drawManager.applyAnimationProgressToTouch(progress);
         this.drawManager.draw()
@@ -141,7 +139,6 @@ export struct SimulateCurlView {
           .height(Constants.FULL_PERCENT)
           .id(NODE_CONTAINER_ID)
           .onReady(() => {
-            console.info('canvas need draw')
             this.isReady = true;
             if (this.drawManager !== null) {
               if (!this.drawManager.canvasSize.isEmpty() && !this.drawManager.touch.offset.isEmpty()) {
@@ -164,18 +161,13 @@ export struct SimulateCurlView {
     .gesture(
       PanGesture()
         .onActionStart((event) => {
-          console.info('PanGesture:start');
 
           if (this.drawManager !== null) {
             this.drawManager.dispatchPointerStart(event)
           }
         })
         .onActionUpdate((event) => {
-          console.info(`绘制事件耗时:绘制事件发生,timeStamp:${Date.now()},间隔：${Date.now() - (this.lastTime ?? 0)}`)
-          this.lastTime = Date.now();
           try {
-            let startTime = Date.now();
-            console.info('PanGesture:update');
 
             if (this.drawManager !== null) {
               this.isTurnNext = this.drawManager.dispatchPointerMoveEvent(event)
@@ -186,10 +178,8 @@ export struct SimulateCurlView {
                 this.drawManager.draw();
               }
             }
-            let endTime = Date.now();
-            console.info(`绘制事件耗时：${endTime - startTime}`)
           } catch (e) {
-            console.error(e)
+            Logger.error('SimulateCurlView.build failed', Logger.errorSummary(e))
           }
         })
         .onActionEnd((event) => {
@@ -199,7 +189,6 @@ export struct SimulateCurlView {
             this.isOnGesture = false;
             let isShowStartInertiaAnimation = this.isTurnNext ? velocity <= -30 : velocity >= -30;
             this.startAnimation(!isShowStartInertiaAnimation, this.isTurnNext);
-            console.info(`animation: start time is ${Date.now()}`)
           }
         })
         .onActionCancel(() => {

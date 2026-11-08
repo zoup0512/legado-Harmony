@@ -24,11 +24,10 @@ class DbUtil {
       relationalStore.getRdbStore(context, CommonConstants.STORE_CONFIG)
         .then(rdbStore => {
           this.rdbStore = rdbStore;
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`, 'rdbStore 初始化成功');
           resolve();
         })
         .catch((reason: string) => {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`, 'rdbStore 初始化失败', JSON.stringify(reason));
+          Logger.error('DbUtil.initDB failed', Logger.errorSummary(reason));
           reject(reason);
         })
     });
@@ -54,7 +53,7 @@ class DbUtil {
       }
       relationalStore.deleteRdbStore(context, CommonConstants.STORE_CONFIG, (error) => {
         if (error) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`, 'rdbStore 删除失败', JSON.stringify(error));
+          Logger.error('DbUtil.deleteDB failed', Logger.errorSummary(error));
           reject(error);
         }
         this.rdbStore = undefined;
@@ -79,13 +78,10 @@ class DbUtil {
     return new Promise<void>((resolve, reject) => {
       this.rdbStore?.executeSql(executeSql)
         .then(() => {
-          console.info('TagInfo', '执行成功')
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'执行成功');
           resolve();
         })
         .catch((reason: string) => {
-          console.info('TagInfo Error:', reason)
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'执行失败', JSON.stringify(reason));
+          Logger.error('DbUtil.executeSql failed', Logger.errorSummary(reason));
           reject(reason);
         })
     });
@@ -101,7 +97,6 @@ class DbUtil {
         .then((result) => {
           let rowNames: string[] = [];
           if (result.rowCount <= 0) {
-            Logger.debug('无结果');
             resolve(rowNames);
           }
           while (!result.isAtLastRow) {
@@ -109,11 +104,10 @@ class DbUtil {
             const row = result.getRow()
             rowNames.push(row.name as string)
           }
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'执行成功');
           resolve(rowNames);
         })
         .catch((reason: string) => {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'执行失败', JSON.stringify(reason));
+          Logger.error('DbUtil.queryRowNames failed', Logger.errorSummary(reason));
           reject(reason);
         })
     });
@@ -132,10 +126,9 @@ class DbUtil {
       // 2.新增
       this.rdbStore?.insert(tableName, value, (err, id) => {
         if (err) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'新增失败！', JSON.stringify(err));
+          Logger.error('DbUtil.insert failed', Logger.errorSummary(err));
           reject(err);
         } else {
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'新增成功！新增id：', id.toString());
           resolve(id);
         }
       })
@@ -150,10 +143,9 @@ class DbUtil {
     return new Promise((resolve, reject) => {
       this.rdbStore?.delete(predicates, (err, rows) => {
         if (err) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'删除失败!,', JSON.stringify(err));
+          Logger.error('DbUtil.delete failed', Logger.errorSummary(err));
           reject(err);
         } else {
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'删除成功！删除行数：', rows.toString());
           resolve(rows);
         }
       })
@@ -172,7 +164,6 @@ class DbUtil {
     }
     const result = await rdbStore.querySql(sql);
     try {
-      Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
       return this.parseResultSet<T>(result, columns);
     } finally {
       result.close();
@@ -191,7 +182,6 @@ class DbUtil {
     }
     const result = await rdbStore.query(predicates, columns.map(info => info.columnName));
     try {
-      Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
       return this.parseResultSet<T>(result, columns);
     } finally {
       result.close();
@@ -207,10 +197,9 @@ class DbUtil {
     return new Promise((resolve, reject) => {
       this.rdbStore?.query(predicates, columns.map(info => info.columnName), (err, result) => {
         if (err) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`,'查询失败!',JSON.stringify(err));
+          Logger.error('DbUtil.queryForCount failed', Logger.errorSummary(err));
           reject(err);
         } else {
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`,'查询成功！查询行数：', result.rowCount.toString());
           resolve(result.rowCount);
         }
       })
@@ -230,10 +219,9 @@ class DbUtil {
       // 2.更新
       this.rdbStore?.update(value, predicates, (err, result) => {
         if (err) {
-          Logger.error(`[${CommonConstants.RDB_TAG}]`, '更新失败！', JSON.stringify(err));
+          Logger.error('DbUtil.update failed', Logger.errorSummary(err));
           reject(err);
         } else {
-          Logger.debug(`[${CommonConstants.RDB_TAG}]`, '更新成功！更新行数：', result.toString());
           resolve(result);
         }
       })
@@ -250,7 +238,6 @@ class DbUtil {
     let arr: T[] = [];
     // 2.判断是否有结果
     if (result.rowCount <= 0) {
-      Logger.debug('无结果');
       return arr;
     }
     // 3.处理结果

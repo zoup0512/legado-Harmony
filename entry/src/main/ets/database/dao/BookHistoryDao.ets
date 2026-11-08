@@ -1,3 +1,4 @@
+import Logger from '../../common/utils/Logger';
 /**
  * @author 2008
  * @datetime 2024/8/05 22:34
@@ -38,7 +39,7 @@ class BookHistoryDao {
       AppDatabaseUtil.existsTable(this.TABLE_NAME)
       return
     } catch (err) {
-      console.info('TagInfo', JSON.stringify(err))
+      Logger.error('BookHistoryDao.initBookHistoryTable failed', Logger.errorSummary(err))
     }
   }
 
@@ -69,7 +70,7 @@ class BookHistoryDao {
 
       return await this.publicHistories(bookHistoryDbList, generation)
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('BookHistoryDao.search failed', Logger.errorSummary(err))
       return []
     }
   }
@@ -91,7 +92,7 @@ class BookHistoryDao {
       // Apply the limit after filtering, so a private last-read row cannot hide public history.
       return (await this.publicHistories(bookHistoryDbList, generation)).slice(0, 1)
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('BookHistoryDao.searchLimit failed', Logger.errorSummary(err))
       return []
     }
   }
@@ -107,10 +108,9 @@ class BookHistoryDao {
       if (await this.isPrivateHistory(bookHistory) || getPrivacyGeneration() !== generation) return false;
       bookHistory.createTime = Date.now()
       await DbUtil.insert(this.TABLE_NAME, bookHistory, column)
-      console.log('TagInfo', '创建成功')
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookHistoryDao.insert failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -129,7 +129,7 @@ class BookHistoryDao {
       await DbUtil.update(predicates, bookHistory, column)
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookHistoryDao.update failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -142,7 +142,7 @@ class BookHistoryDao {
       await DbUtil.delete(predicates)
       return true
     }  catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookHistoryDao.deleteBookHistory failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -153,7 +153,7 @@ class BookHistoryDao {
       await DbUtil.delete(predicates)
       return true
     }  catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BookHistoryDao.deleteAllBookHistory failed', Logger.errorSummary(err))
       return false
     }
   }

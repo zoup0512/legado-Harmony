@@ -1,3 +1,4 @@
+import Logger from '../../utils/Logger';
 import measure from '@ohos.measure'
 import I18n from '@ohos.i18n';
 
@@ -33,7 +34,7 @@ export class NovelContentParseHelper {
         pageContent[pageIndex] = pageParagraphList
         pageIndex++;
       } catch (e) {
-        console.error(e)
+        Logger.error('NovelContentParseHelper.calculateChapterContent failed', Logger.errorSummary(e))
       }
     }
 

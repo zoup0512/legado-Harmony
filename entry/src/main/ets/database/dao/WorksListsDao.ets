@@ -1,3 +1,4 @@
+import Logger from '../../common/utils/Logger';
 import DbUtil from '../../common/utils/DbUtil';
 import AppDatabaseUtil from '../AppDatabaseUtil';
 import { ToWorksLists, ToWorksListsDb, WorksLists, worksListsDb } from '../entities/WorksLists';
@@ -21,7 +22,7 @@ class WorksListsDao {
       AppDatabaseUtil.existsTable(this.TABLE_NAME)
       return
     } catch (err) {
-      console.info('TagInfo', JSON.stringify(err))
+      Logger.error('WorksListsDao.initWorksListsTable failed', Logger.errorSummary(err))
     }
   }
 
@@ -52,10 +53,9 @@ class WorksListsDao {
 `;
       const workDbList = await DbUtil.querySqlForList<worksListsDb>(sql, column);
       const worksList = workDbList.map((item): WorksLists => ToWorksLists(item));
-      console.log("TagInfo", '书单：' + worksList.length)
       return worksList
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('WorksListsDao.search failed', Logger.errorSummary(err))
       return []
     }
   }
@@ -68,7 +68,7 @@ class WorksListsDao {
       }
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('WorksListsDao.batchInsert failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -89,10 +89,9 @@ class WorksListsDao {
       worksListsDb.worksBookNum = works.worksBookList?.length ?? 0
       worksListsDb.createTime = Date.now()
       await DbUtil.insert(this.TABLE_NAME, worksListsDb, column)
-      console.log('TagInfo', '创建成功')
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('WorksListsDao.insert failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -113,7 +112,7 @@ class WorksListsDao {
       await DbUtil.update(predicates, worksListsDb, column)
       return true
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('WorksListsDao.update failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -135,7 +134,7 @@ class WorksListsDao {
       }
       return false
     } catch (err) {
-      console.log('isUpdateWorksTop, Error, ', JSON.stringify(err))
+      Logger.error('WorksListsDao.isUpdateWorksTop failed', Logger.errorSummary(err))
       return false
     }
   }
@@ -148,7 +147,7 @@ class WorksListsDao {
       await DbUtil.delete(predicates)
       return true
     }  catch (err) {
-      console.log('deleteBook, Error, ', JSON.stringify(err))
+      Logger.error('WorksListsDao.deleteWorks failed', Logger.errorSummary(err))
       return false
     }
   }

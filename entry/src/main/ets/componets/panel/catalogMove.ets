@@ -69,7 +69,6 @@ export default struct catalogMove{
         showMessage('请选择要移动的内容')
         return
       }
-      console.log(JSON.stringify(this.checkBookList))
       this.clickBookType = title
       this.clickBookTypeDialog?.open()
     })
@@ -111,7 +110,6 @@ export default struct catalogMove{
   }
   //确定
   onAccept(){
-    console.log(this.bookType)
     //对比bookType看是否BooTypeList数组中存在
     if (this.BooTypeList.includes(this.bookType)) {
       showMessage(`已存${this.bookType}分组`)
@@ -159,7 +157,6 @@ export default struct catalogMove{
       for (let j = 0; j < this.showBookList.length; j++) {
         if (this.checkBookList[i].bookId === this.showBookList[j].bookId) {
           this.showBookList[j].bookType = this.clickBookType
-          console.log(JSON.stringify(this.showBookList) + 'test')
           return
         }
       }

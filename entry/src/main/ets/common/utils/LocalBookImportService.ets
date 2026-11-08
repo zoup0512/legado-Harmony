@@ -1,9 +1,9 @@
+import Logger from './Logger';
 import { BusinessError } from '@ohos.base';
 import fs from '@ohos.file.fs';
 import { common } from '@kit.AbilityKit';
 import { fileUri, hash, ListFileOptions, picker } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
-import { hilog } from '@kit.PerformanceAnalysisKit';
 import BooksDao from '../../database/dao/BooksDao';
 import { Books } from '../../database/entities/Books';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
@@ -171,16 +171,12 @@ export class LocalBookImportService {
 
   async pickFileUris(context: common.UIAbilityContext,
     requestId: string = this.createRequestId()): Promise<string[]> {
-    const started = Date.now();
     try {
       const options = new picker.DocumentSelectOptions();
       options.maxSelectNumber = LOCAL_BOOK_IMPORT_MAX_COUNT;
       options.fileSuffixFilters = LOCAL_BOOK_FILE_SUFFIX_FILTERS;
       const documentPicker = new picker.DocumentViewPicker(context);
       const result = await documentPicker.select(options);
-      hilog.info(0x0000, 'LocalImport',
-        'request=%{public}s stage=picker.files.done count=%{public}d elapsedMs=%{public}d',
-        requestId, result.length, Date.now() - started);
       return result.slice(0, LOCAL_BOOK_IMPORT_MAX_COUNT);
     } catch (error) {
       this.logError(requestId, 'picker.files', error as BusinessError);
@@ -191,20 +187,14 @@ export class LocalBookImportService {
   async pickDirectoryUris(context: common.UIAbilityContext,
     requestId: string = this.createRequestId()): Promise<string[]> {
     if (!this.canPickDirectory()) {
-      hilog.info(0x0000, 'LocalImport',
-        'request=%{public}s stage=picker.folder.unsupported', requestId);
       return [];
     }
-    const started = Date.now();
     try {
       const options = new picker.DocumentSelectOptions();
       options.maxSelectNumber = 1;
       options.selectMode = picker.DocumentSelectMode.FOLDER;
       const documentPicker = new picker.DocumentViewPicker(context);
       const result = await documentPicker.select(options);
-      hilog.info(0x0000, 'LocalImport',
-        'request=%{public}s stage=picker.folder.done count=%{public}d elapsedMs=%{public}d',
-        requestId, result.length, Date.now() - started);
       return result.slice(0, 1);
     } catch (error) {
       this.logError(requestId, 'picker.folder', error as BusinessError);
@@ -236,10 +226,6 @@ export class LocalBookImportService {
     }
     await this.applyDuplicateAndNameRules(result.candidates);
     result.summary = this.summarize(result.candidates);
-    hilog.info(0x0000, 'LocalImport',
-      'request=%{public}s stage=scan.files.done total=%{public}d ready=%{public}d duplicate=%{public}d failed=%{public}d',
-      requestId, result.summary.total, result.summary.ready, result.summary.duplicate,
-      result.summary.failed + result.summary.unsupported);
     return result;
   }
 
@@ -291,10 +277,6 @@ export class LocalBookImportService {
       }
       await this.applyDuplicateAndNameRules(result.candidates);
       result.summary = this.summarize(result.candidates);
-      hilog.info(0x0000, 'LocalImport',
-        'request=%{public}s stage=scan.folder.done recursive=%{public}s total=%{public}d ready=%{public}d duplicate=%{public}d failed=%{public}d',
-        requestId, String(recursion), result.summary.total, result.summary.ready, result.summary.duplicate,
-        result.summary.failed + result.summary.unsupported);
       return result;
     } catch (error) {
       this.logError(requestId, 'scan.folder', error as BusinessError);
@@ -358,10 +340,6 @@ export class LocalBookImportService {
       }
     }
     this.fillBatchCounts(batchResult);
-    hilog.info(0x0000, 'LocalImport',
-      'request=%{public}s stage=import.batch.done selected=%{public}d imported=%{public}d duplicate=%{public}d failed=%{public}d cancelled=%{public}d',
-      requestId, batchResult.selected, batchResult.imported, batchResult.duplicate,
-      batchResult.failed, batchResult.cancelled);
     return batchResult;
   }
 
@@ -835,9 +813,7 @@ export class LocalBookImportService {
   }
 
   private logError(requestId: string, stage: string, error: BusinessError): void {
-    hilog.error(0x0000, 'LocalImport',
-      'request=%{public}s stage=%{public}s code=%{public}s',
-      requestId, stage, String(error.code ?? 'unknown'));
+    Logger.error('LocalImport operation failed', stage, error.code ?? 0);
   }
 }
 

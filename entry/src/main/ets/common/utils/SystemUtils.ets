@@ -1,3 +1,4 @@
+import Logger from './Logger';
 /**
  * @author 2008
  * @datetime 2024/8/13 22:04
@@ -16,10 +17,9 @@ class SystemUtils {
     };
     context.startAbility(want)
       .then(() => {
-        console.error('Start browsableAbility successfully.');
       })
       .catch((err: BusinessError) => {
-        console.error(`Failed to startAbility. Code: ${err.code}, message: ${err.message}`);
+        Logger.error('SystemUtils.startBrowsableAbility failed', Logger.errorSummary(err));
       });
   }
 }

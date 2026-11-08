@@ -2,6 +2,7 @@
 .idea/
 .ohos/
 .hvigor/
+.zcode/
 *.iml
 *.iws
 *.ipr

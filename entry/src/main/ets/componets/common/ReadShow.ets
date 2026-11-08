@@ -150,7 +150,6 @@ export default struct ReadShow {
           Image($r("app.media.outlined")).width(15).height(15)
             .onClick(() => {
               this.showReadShow = !this.showReadShow
-              console.log(this.showReadShow + '')
             })
         }
         .borderRadius(10)

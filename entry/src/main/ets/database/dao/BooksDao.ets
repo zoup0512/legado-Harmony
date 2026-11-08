@@ -1,3 +1,4 @@
+import Logger from '../../common/utils/Logger';
 import booksUtils from '../../common/utils/booksUtils';
 import DbUtil from '../../common/utils/DbUtil';
 import toolsUtils from '../../common/utils/ToolsUtils';
@@ -68,7 +69,7 @@ class BooksDao {
       await AppDatabaseUtil.existsTable(this.TABLE_NAME)
       return
     } catch (err) {
-      console.info('TagInfo', JSON.stringify(err))
+      Logger.error('BooksDao.initBooksTable failed', Logger.errorSummary(err))
     }
   }
 
@@ -129,10 +130,9 @@ class BooksDao {
 
       const bookDbList = await DbUtil.querySqlForList<Books>(sql, column);
       if (bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return [];
-      console.log("TagInfo", '书籍：' + bookDbList.length)
       return bookDbList
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('BooksDao.search failed', Logger.errorSummary(err))
       return []
     }
   }
@@ -157,7 +157,7 @@ class BooksDao {
       if (bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return 0;
       return count
     } catch (e){
-      console.log("TagInfo", JSON.stringify(e))
+      Logger.error('BooksDao.getBookCount failed', Logger.errorSummary(e))
       return 0
     }
   }
@@ -226,10 +226,9 @@ class BooksDao {
 
       const bookDbList = await DbUtil.querySqlForList<Books>(sql, column);
       if (bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return [];
-      console.log("TagInfo", '书籍：' + bookDbList.length)
       return bookDbList;
     } catch (err) {
-      console.log("TagInfo", JSON.stringify(err))
+      Logger.error('BooksDao.searchPage failed', Logger.errorSummary(err))
       return [];
     }
   }
@@ -243,7 +242,7 @@ class BooksDao {
       }
       return true;
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err));
+      Logger.error('BooksDao.batchInsert failed', Logger.errorSummary(err));
       return false;
     }
   }
@@ -265,7 +264,7 @@ class BooksDao {
       // Import rollback must never remove the file of an already-persisted book.
       return true;
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err));
+      Logger.error('BooksDao.insert failed', Logger.errorSummary(err));
       return false;
     }
   }
@@ -281,7 +280,7 @@ class BooksDao {
       if (books.bookGroup === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return false;
       return await DbUtil.update(predicates, books, column) === 1;
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err));
+      Logger.error('BooksDao.update failed', Logger.errorSummary(err));
       return false;
     }
   }
@@ -301,7 +300,7 @@ class BooksDao {
       }
       return books.length > 0;
     } catch (err) {
-      console.log('isUpdateBookTop, Error, ', JSON.stringify(err));
+      Logger.error('BooksDao.isUpdateBookTop failed', Logger.errorSummary(err));
       return false;
     }
   }
@@ -337,7 +336,7 @@ class BooksDao {
       }
       return true;
     } catch (err) {
-      console.log('updateBookGroup, Error, ', JSON.stringify(err));
+      Logger.error('BooksDao.updateBookGroup failed', Logger.errorSummary(err));
       return false;
     }
   }
@@ -371,7 +370,7 @@ class BooksDao {
 
       return BookGroupId;
     } catch (e) {
-      console.log('getBookIdsByGroupId, Error, ', JSON.stringify(e));
+      Logger.error('BooksDao.getBookIdsByGroupId failed', Logger.errorSummary(e));
       return [];
     }
   }
@@ -399,7 +398,7 @@ class BooksDao {
       if (groupId.includes(PRIVACY_BOOK_GROUP) && !isPrivacyGenerationValid(generation)) return [];
       return GroupBookId
     } catch (e) {
-      console.log('queryBooksByGroupId, Error, ', JSON.stringify(e));
+      Logger.error('BooksDao.queryBooksByGroupId failed', Logger.errorSummary(e));
       return []
     }
   }
@@ -415,7 +414,7 @@ class BooksDao {
       await DbUtil.delete(predicates);
       return !privateOperation || isPrivacyGenerationValid(generation);
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err));
+      Logger.error('BooksDao.deleteBook failed', Logger.errorSummary(err));
       return false;
     }
   }
@@ -432,7 +431,7 @@ class BooksDao {
       if (groupId === PRIVACY_BOOK_GROUP && !isPrivacyGenerationValid(generation)) return 0;
       return count
     } catch (err) {
-      console.log('TagInfo, Error, ', JSON.stringify(err))
+      Logger.error('BooksDao.countBookByGroup failed', Logger.errorSummary(err))
       return 0
     }
   }
@@ -452,7 +451,7 @@ class BooksDao {
       }
       return ids.length === 0 || await this.updateBookGroup(ids, updateGroupId, generation);
     } catch (e) {
-      console.log('TagInfo, Error, ', JSON.stringify(e));
+      Logger.error('BooksDao.queryBookByGroup failed', Logger.errorSummary(e));
       return false;
     }
   }
@@ -460,7 +459,7 @@ class BooksDao {
   // 校验当前书籍是否存在书架中
   async isExistBooks(bookUrl?: string, bookName?: string): Promise<Books[]> {
     if (!bookUrl || !bookName) {
-      console.warn('bookUrl or bookName is missing.');
+      Logger.warn('BooksDao.isExistBooks requires URL and name');
       return [];
     }
 
@@ -473,7 +472,7 @@ class BooksDao {
       const books = await DbUtil.queryForList<Books>(predicates, column);
       return books || [];
     } catch (err) {
-      console.error('isExistBooks, Error:', err);
+      Logger.error('BooksDao.isExistBooks failed', Logger.errorSummary(err));
       return [];
     }
   }
@@ -488,7 +487,7 @@ class BooksDao {
       const books = await DbUtil.queryForList<Books>(predicates, column);
       return books || [];
     } catch (err) {
-      console.error('getLocalBooksForImportDuplicateCheck, Error:', err);
+      Logger.error('BooksDao.getLocalBooksForImportDuplicateCheck failed', Logger.errorSummary(err));
       return [];
     }
   }
@@ -507,7 +506,7 @@ class BooksDao {
       }
       return names;
     } catch (err) {
-      console.error('getExistingBookNames, Error:', err);
+      Logger.error('BooksDao.getExistingBookNames failed', Logger.errorSummary(err));
       return [];
     }
   }
@@ -531,7 +530,7 @@ class BooksDao {
 
       return books;
     } catch (e) {
-      console.log('getBookIds, Error, ', JSON.stringify(e));
+      Logger.error('BooksDao.getBookByIds failed', Logger.errorSummary(e));
       return [];
     }
   }
@@ -539,7 +538,7 @@ class BooksDao {
   async partialUpdate(books: Books) {
     const generation = capturePrivacyGeneration();
     if (!books || books.id === undefined) {
-      console.warn('Invalid Books data.');
+      Logger.warn('BooksDao.partialUpdate requires book ID');
       return;
     }
 
@@ -554,10 +553,10 @@ class BooksDao {
         if (!await this.canWriteBook(books, generation)) return;
         await DbUtil.update(predicates, books, column);
       } else {
-        console.warn('No records found for update.');
+        Logger.warn('BooksDao.partialUpdate found no records');
       }
     } catch (err) {
-      console.error('Error in partialUpdate:', err);
+      Logger.error('BooksDao.partialUpdate failed', Logger.errorSummary(err));
     }
   }
 
