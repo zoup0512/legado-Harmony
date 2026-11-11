@@ -16,13 +16,14 @@ export default struct BookBodyContent {
   @Prop index:number
   @Prop currentIndex: number = 0
   @State EXHIBIT_NAMES: string[] = ['列表', '宫格']
-  @State GROUP_NAMES: string[] = ['标签', '文件夹']
   @Link EXHIBIT: string
   @Link GROUP: string
   @State searchValue: string = '最近阅读'
   @Link bookTypeNumber:number
   @State title: string = '最近阅读'
   @State groupCoverShow: boolean = false
+  // 没有自建分组时不显示分组栏，列表也不再为它预留顶部空间
+  @State showGroupStrip: boolean = false
   @State bookBodyIndex: number = 0
   tabsBookBodyController: TabsController = new TabsController();
   @StorageLink('BOOK_IS_BOOK_HISTORY_REFRESHING') isBookHistoryRefreshing: number = 0
@@ -48,7 +49,6 @@ export default struct BookBodyContent {
                   this.searchValue = '浏览历史'
                 })
               if (this.searchValue !== '浏览历史') {
-                this.GroupBuilder()
                 this.ExhibitBuilder()
                 Text('管理')
                   .onClick(() => {
@@ -90,7 +90,8 @@ export default struct BookBodyContent {
             bookTypeNumber:this.bookTypeNumber,
             currentIndex: this.currentIndex,
             groupCoverShow: this.groupCoverShow,
-            GROUP: this.GROUP
+            GROUP: this.GROUP,
+            showGroupStrip: this.showGroupStrip
           }).zIndex(999)
         }
         Tabs({
@@ -103,7 +104,8 @@ export default struct BookBodyContent {
               GROUP: this.GROUP,
               searchValue: this.searchValue,
               currentIndex: this.currentIndex,
-              bookTypeNumber:this.bookTypeNumber
+              bookTypeNumber:this.bookTypeNumber,
+              showGroupStrip: this.showGroupStrip
             })
           }
           .align(Alignment.Top)
@@ -146,25 +148,6 @@ export default struct BookBodyContent {
   }
 
 
-  @Builder
-  GroupBuilder() {
-    Row({ space: 10 }) {
-      ForEach(this.GROUP_NAMES, (item: string) => {
-        if (item !== this.GROUP) {
-          IndexSearchType({ title: item, searchValue: this.searchValue })
-            .onClick(() => {
-              this.GROUP = item
-            })
-          Divider()
-            .vertical(true)
-            .height(15)
-            .color('#989797')
-            .opacity(0.5)
-            .strokeWidth(1)
-        }
-      })
-    }
-  }
   @Builder
   ExhibitBuilder() {
     Row({ space: 10 }) {

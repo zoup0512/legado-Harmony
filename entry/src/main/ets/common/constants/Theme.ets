@@ -2,6 +2,8 @@ import { ThemeColorItem } from "../model/Theme"
 
 // 配置主题颜色
 export class ThemeColor {
+  // 默认主题：黛蓝
+  static readonly INDIGO: ThemeColorItem = {mainColor: '#3d5a80', secondColor: '#e8eef6'}
   static readonly ORANGE: ThemeColorItem = {mainColor: '#ff6600', secondColor: '#ffece0'}
   static readonly RED: ThemeColorItem = {mainColor: '#ef4444', secondColor: '#fde8e8'}
   static readonly YELLOW: ThemeColorItem = {mainColor: '#ff9500', secondColor: '#fff2e0'}
@@ -15,4 +17,5 @@ export class ThemeStorageKey {
   static readonly THEMELIST: string = 'themelist'
   static readonly THEMELISTSTR: string = 'themeliststr'
   static readonly THEMEINDEX: string = 'themeindex' // 被选中主题索引key
+  static readonly DEFAULT_MIGRATED: string = 'themeDefaultIndigoMigrated' // 旧橙色默认主题迁移标记
 }

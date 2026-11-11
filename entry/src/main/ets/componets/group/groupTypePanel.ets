@@ -5,8 +5,6 @@ import BookGroupsDao from '../../database/dao/BookGroupsDao'
 import { BookGroups } from '../../database/entities/BookGroups'
 import BookManageDialog from '../../pages/view/bookShelf/components/dialog/BookManageDialog'
 import FolderInfoDialog from '../../pages/view/bookShelf/components/dialog/FolderInfoDialog'
-import { updateAppData } from '../../storage/appData'
-import customizeDialogExample from '../common/customizeDialog'
 import hideDialogExample from '../common/hideDialog'
 import { showMessage } from '../common/promptShow'
 
@@ -17,7 +15,6 @@ export default struct groupTypePanel {
   @Prop showGroupList: BookGroups[] = []
   @State hideList: BookGroups[] = []
   @Prop currentIndex: number = 0
-  @StorageProp('APP_INDEX_SCROLLABLE') APP_INDEX_SCROLLABLE: boolean = true
   @Prop clickGroup: BookGroups
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
@@ -107,19 +104,6 @@ export default struct groupTypePanel {
           Text('隐藏分组').fontSize(16).fontWeight(500).lineHeight(24).fontColor('rgba(0, 0, 0, 0.88)')
           Text('点击进入,长按编辑').fontSize(12).fontWeight(400).lineHeight(20).fontColor('rgba(0, 0, 0, 0.45)')
         }.alignItems(VerticalAlign.Bottom)
-
-        Row({ space: 8 }) {
-          Image($r('app.media.help')).width(20).height(20).onClick(() => {
-            this.tagLockDialog?.open()
-          })
-          Text('标签锁').fontSize(16).fontWeight(500).lineHeight(24).fontColor('rgba(0, 0, 0, 0.45)')
-          Toggle({ type: ToggleType.Switch, isOn: $$this.APP_INDEX_SCROLLABLE })
-            .selectedColor(this.theme.mainColor).hoverEffect(HoverEffect.None)
-            .onChange(() => {
-              updateAppData(this.APP_INDEX_SCROLLABLE)
-              showMessage(this.APP_INDEX_SCROLLABLE ? '标签栏锁已开启' : '标签栏已解锁')
-            })
-        }.alignItems(VerticalAlign.Bottom).justifyContent(FlexAlign.End)
       }
 
       if (this.hideList.length > 0) {
@@ -188,28 +172,6 @@ export default struct groupTypePanel {
     })
     .width('100%')
     .backgroundColor(Color.White)
-  }
-
-  @State tagLockContent: string = '长按底部tab栏书架图标可锁定分组标签栏，再次长按解锁，锁定后左右滑动将直接切换小说，漫画，有声书分组大类。'
-  tagLockDialog: CustomDialogController | null = new CustomDialogController({
-    builder: customizeDialogExample({
-      confirm: () => {
-        this.onAccept()
-      },
-      title: '标签锁',
-      content: this.tagLockContent
-    }),
-    width: '90%',
-    autoCancel: true,
-    alignment: DialogAlignment.Center,
-    // offset: { dx: 0, dy: '-40%' },
-    gridCount: 4,
-    customStyle: false,
-    cornerRadius: 25
-  })
-
-  onAccept() {
-    this.tagLockDialog?.close()
   }
 
   @Builder

@@ -1,4 +1,6 @@
 import { SetList } from '../dataList/SetListGroup'
+import { ThemeStorageKey } from '../../common/constants/Theme'
+import { ThemeItem } from '../../common/model/Theme'
 
 @Component
 export struct SetListView{
@@ -13,6 +15,8 @@ export struct SetListView{
   bottomRight: number = 0
 
   @ObjectLink setList :SetList
+  // 主题颜色
+  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
 
 
   build() {
@@ -39,7 +43,7 @@ export struct SetListView{
           Image($r("app.media.right")).size({width:25,height:25})
         }else {
           Toggle({ type: ToggleType.Switch, isOn: this.setList.toggleStatus})
-            .selectedColor("#F60").hoverEffect(HoverEffect.None)
+            .selectedColor(this.theme.mainColor).hoverEffect(HoverEffect.None)
         }
       }.alignItems(VerticalAlign.Center)
 

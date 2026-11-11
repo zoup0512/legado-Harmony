@@ -1,15 +1,12 @@
-import BookMark from '../../../componets/head/BookMark'
 import { router } from '@kit.ArkUI'
 import BookBodyContent from './components/BookBodyContent'
-import { ThemeItem } from '../../../common/model/Theme'
-import { ThemeStorageKey } from '../../../common/constants/Theme'
 import { IconTitleVo } from '../../../componetsmodel/IconTitleVo'
 import dialogTitleFuction from '../../../componets/common/dialogTitleFuction'
 
 @Component
 export default struct IndexShelf {
+  // 书架只保留一种书籍类型（0 小说）；仍向下传递，供各 DAO 查询使用
   @State currentIndex: number = 0
-  titleArray: Array<string> = ['小说', '漫画', '有声书']
   @State bookTypeNumber: number = 2
   @State EXHIBIT: string = '列表'
   @State @Watch('changeGroup') GROUP: string = '标签'
@@ -26,96 +23,35 @@ export default struct IndexShelf {
   }
 
   @StorageLink('topRectHeight') topRectHeight: number = 0
-  @StorageProp('APP_INDEX_SCROLLABLE') APP_INDEX_SCROLLABLE: boolean = false
-  // 主题颜色
-  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
-  tabsController: TabsController = new TabsController();
-  private scrollController: Scroller = new Scroller();
 
   build() {
     Column() {
-      Flex({
-        justifyContent: FlexAlign.SpaceBetween,
-        alignItems: ItemAlign.End
-      }) {
-        Row() {
-          List({ scroller: this.scrollController }) {
-            ListItem() {
-              BookMark({ title: '小说', index: 0, currentIndex: this.currentIndex }).onClick(() => {
-                this.currentIndex = 0
-                this.tabsController.changeIndex(0)
-              })
-            }
-
-            ListItem() {
-              BookMark({ title: '漫画', index: 1, currentIndex: this.currentIndex }).onClick(() => {
-                this.currentIndex = 1
-                this.tabsController.changeIndex(1)
-              })
-            }
-
-            ListItem() {
-              BookMark({ title: '有声书', index: 2, currentIndex: this.currentIndex }).onClick(() => {
-                this.currentIndex = 2
-                this.tabsController.changeIndex(2)
-              })
-            }
-          }
-          // .align(Alignment.TopStart)
-          .height(40)
-          .scrollBar(BarState.Off)
-          .listDirection(Axis.Horizontal)
-        }
-
-        Row({ space: 16 }) {
-          // 隐私文件夹入口：书架常驻露出
-          Image($r('app.media.privacy_lock')).width(24)
-            .accessibilityText('隐私文件夹')
-            .onClick(() => {
-              router.pushUrl({
-                url: 'pages/view/myCenter/PrivacyFolder'
-              });
-            })
-          Image($r('app.media.more')).width(24)
-            .bindMenu(this.MenuBuilder())
-        }.margin({ bottom: 12 })
+      Row() {
+        Text('书架')
+          .fontSize(24)
+          .fontWeight(700)
+          .fontColor('rgba(0,0,0,0.9)')
+        Blank()
+        Image($r('app.media.more')).width(24)
+          .bindMenu(this.MenuBuilder())
       }
-      .padding({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight, left: 20, right: 20 })
+      .width('100%')
+      .height(44)
+      .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight })
+      .padding({ left: 20, right: 20 })
 
-      Tabs({
-        barPosition: BarPosition.Start,
-        controller: this.tabsController,
-        index: this.currentIndex
-      }) {
-        ForEach(this.titleArray, () => {
-          TabContent() {
-            Column() {
-              BookBodyContent({
-                currentIndex: this.currentIndex,
-                EXHIBIT: this.EXHIBIT,
-                GROUP: this.GROUP,
-                bookTypeNumber: this.bookTypeNumber
-              })
-            }
-          }
+      Column() {
+        BookBodyContent({
+          currentIndex: this.currentIndex,
+          EXHIBIT: this.EXHIBIT,
+          GROUP: this.GROUP,
+          bookTypeNumber: this.bookTypeNumber
         })
       }
       .layoutWeight(1)
-      .barWidth(0)
-      .barHeight(0)
-      .onChange((index) => {
-        this.tabsController.changeIndex(index)
-        this.currentIndex = index
-      })
-      .backgroundColor(Color.White)
-      .scrollable(this.APP_INDEX_SCROLLABLE)
     }
     .height('100%')
-    .linearGradient({
-      direction: GradientDirection.Bottom, // 渐变方向
-      colors: [[this.theme.mainColor, 0], [this.theme.secondColor, 0.2]] // 数组末尾元素占比小于1时满足重复着色效果
-    })
-    .borderRadius({ bottomRight: 5, bottomLeft: 5 })
+    .backgroundColor(Color.White)
   }
 
   @Builder

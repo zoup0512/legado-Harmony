@@ -24,6 +24,7 @@ export default struct BookContentRefresh {
   @Link GROUP: string
   @Prop searchValue: string
   @Link bookTypeNumber:number
+  @Prop showGroupStrip: boolean = true
   @State checkGroup:Record<number, boolean> = {}
   changeRefreshing(){
     if (this.isRefreshing) {
@@ -82,7 +83,7 @@ export default struct BookContentRefresh {
       }
     }
     .height('100%')
-    .margin({ top: this.searchValue === '浏览历史' ? 0 : 30 })
+    .margin({ top: this.searchValue === '浏览历史' || !this.showGroupStrip ? 0 : 30 })
     .onStateChange((refreshStatus: RefreshStatus) => {
       if (refreshStatus === 1 || refreshStatus === 2) {
         this.RefreshingTitle = '松开刷新'

@@ -1,4 +1,6 @@
 import { ReaderFontManager, ReaderFontOption } from '../../common/utils/ReaderFontManager';
+import { ThemeStorageKey } from '../../common/constants/Theme';
+import { ThemeItem } from '../../common/model/Theme';
 
 /**
  * 阅读字体选择面板（bindSheet 内容）。
@@ -18,6 +20,8 @@ export struct FontPickerPanel {
   }
   // 待确认删除的字体路径（按路径而非名称，同名字体不会互相干扰）
   @State pendingDeletePath: string = ''
+  // 主题颜色
+  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
 
   private get textColor(): string {
     return this.colorMode == 0 ? 'rgba(248, 249, 250, 1)' : 'rgba(19, 19, 19, 1.00)'
@@ -116,7 +120,7 @@ export struct FontPickerPanel {
         if (this.isCurrent(option)) {
           Text('✓')
             .fontSize(18)
-            .fontColor('#ff6600')
+            .fontColor(this.theme.mainColor)
             .fontWeight(FontWeight.Bold)
         }
       }

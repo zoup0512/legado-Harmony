@@ -20,6 +20,8 @@ import { ReaderRuntime } from '../../../common/utils/ReaderRuntime';
 import { BookAccessState, BookOwnership } from '../../../privacy/BookAccessState';
 import privacyForeground from '../../../privacy/PrivacyForeground';
 import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../../privacy/PrivateBookAutoUnlock';
+import { ThemeStorageKey } from '../../../common/constants/Theme';
+import { ThemeItem } from '../../../common/model/Theme';
 
 interface ParamsObj {
   bookData: Books,
@@ -41,6 +43,8 @@ struct ReaderPage3 {
     ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET;
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  // 主题颜色
+  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   @State ReaderPadding: number = 24 // 边距
   @State isShowSetting: boolean = false
   @State isShowContentSetting: boolean = false
@@ -715,7 +719,7 @@ struct ReaderPage3 {
                               this.readerSetting.themeBgImg == item.themeBgImg ? 1 : 2)
                             .borderColor(this.readerSetting.themeColor == item.themeColor &&
                               this.readerSetting.fontColor == item.fontColor &&
-                              this.readerSetting.themeBgImg == item.themeBgImg ? '#ff6600' : item.themeColor)
+                              this.readerSetting.themeBgImg == item.themeBgImg ? this.theme.mainColor : item.themeColor)
                             .backgroundColor(item.themeColor)
                             .backgroundImage(item.themeBgImg)
                             .backgroundImagePosition(Alignment.BottomEnd)
