@@ -59,10 +59,10 @@ struct AboutUsPage {
     }, (failure: MarketUpdateFailure): void => {
       if (failure === MarketUpdateFailure.TIMEOUT) {
         Logger.warn('AboutUsPage: app market opening timed out')
-        this.showMarketMessage('未收到应用市场响应，请稍后重试或前往应用市场搜索“密读”查看更新')
+        this.showMarketMessage('未收到应用市场响应，请稍后重试或前往应用市场搜索“隐私阅读器”查看更新')
       } else {
         Logger.warn('AboutUsPage: failed to open app market')
-        this.showMarketMessage('无法打开应用市场，请稍后重试或前往应用市场搜索“密读”查看更新')
+        this.showMarketMessage('无法打开应用市场，请稍后重试或前往应用市场搜索“隐私阅读器”查看更新')
       }
     })
   }

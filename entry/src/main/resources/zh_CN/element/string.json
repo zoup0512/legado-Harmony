@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "密读支持本地书籍导入、阅读和隐私文件夹管理。"
+      "value": "隐私阅读器支持本地书籍导入、阅读和隐私文件夹管理。"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "在密读中导入和阅读本地书籍，并使用隐私文件夹管理书籍。"
+      "value": "在隐私阅读器中导入和阅读本地书籍，并使用隐私文件夹管理书籍。"
     },
     {
       "name": "EntryAbility_label",
-      "value": "密读"
+      "value": "隐私阅读器"
     },
     {
       "name": "retry",

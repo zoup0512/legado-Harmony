@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "Midu supports importing and reading local books and managing privacy folders."
+      "value": "隐私阅读器 supports importing and reading local books and managing privacy folders."
     },
     {
       "name": "EntryAbility_desc",
-      "value": "Import and read local books in Midu, and organize books in privacy folders."
+      "value": "Import and read local books in 隐私阅读器, and organize books in privacy folders."
     },
     {
       "name": "EntryAbility_label",
-      "value": "Midu"
+      "value": "隐私阅读器"
     },
     {
       "name": "retry",
