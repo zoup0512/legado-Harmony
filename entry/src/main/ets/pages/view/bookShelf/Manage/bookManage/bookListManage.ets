@@ -14,7 +14,7 @@ export default struct bookListManage{
     if (this.bookList === null || this.bookList.length === 0) {
       Column() {
         Image($r('app.media.no_record')).width(200).height(200)
-        Text('暂无浏览记录').fontSize(12).fontColor('rgba(96, 96, 96, 0.6)').fontWeight(500).padding(5)
+        Text('书架暂无书籍').fontSize(12).fontColor('rgba(96, 96, 96, 0.6)').fontWeight(500).padding(5)
       }
       .margin({ top: 120 })
 

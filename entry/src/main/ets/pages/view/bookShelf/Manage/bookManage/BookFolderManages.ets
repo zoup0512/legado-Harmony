@@ -46,7 +46,7 @@ export default struct BookFolderManages {
    if (this.bookGroups === null || this.bookGroups.length === 0) {
      Column() {
        Image($r('app.media.no_record')).width(200).height(200)
-       Text('暂无浏览记录').fontSize(12).fontColor('rgba(96, 96, 96, 0.6)').fontWeight(500).padding(5)
+       Text('暂无分组').fontSize(12).fontColor('rgba(96, 96, 96, 0.6)').fontWeight(500).padding(5)
      }
      .margin({ top: 120 })
    } else {

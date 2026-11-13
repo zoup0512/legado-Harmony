@@ -1,5 +1,4 @@
 import BookGroupsDao from './dao/BookGroupsDao'
-import bookHistoryDao from './dao/BookHistoryDao'
 import BooksDao from './dao/BooksDao'
 import worksListsDao from './dao/WorksListsDao'
 import DbUtil from '../common/utils/DbUtil'
@@ -9,17 +8,15 @@ import Logger from '../common/utils/Logger'
 const BOOK_TYPE_MIGRATIONS: string[] = [
   'UPDATE books SET bookType = 0 WHERE bookType != 0',
   'UPDATE book_groups SET groupType = 0 WHERE groupType != 0 AND groupType != 123',
-  'UPDATE book_history SET bookType = 0 WHERE bookType IS NOT NULL AND bookType != 0 AND bookType != 123',
   'UPDATE works_lists SET worksType = 0 WHERE worksType != 0',
 ]
 
 class DataBase {
   async initAllTable() {
-    // 仅初始化本地书库；旧版书源、订阅和缓存表保留在数据库中，不删除用户数据。
+    // 仅初始化本地书库；旧版书源、订阅、缓存和阅读历史表保留在数据库中，不再读写。
     await BooksDao.initBooksTable()
     await BookGroupsDao.initGroupTable()
     await worksListsDao.initWorksListsTable()
-    await bookHistoryDao.initBookHistoryTable()
     await this.migrateBookTypes()
   }
 

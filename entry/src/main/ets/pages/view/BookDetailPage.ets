@@ -1,8 +1,6 @@
 import CommonConstants from '../../common/constants/CommonConstants'
 import { router } from '@kit.ArkUI'
 import { Books } from '../../database/entities/Books'
-import { BookHistory } from '../../database/entities/BookHistory'
-import bookHistoryUtils from '../../common/utils/BookHistoryUtils'
 import booksUtil from '../../common/utils/booksUtils'
 import { ThemeStorageKey } from '../../common/constants/Theme'
 import { ThemeItem } from '../../common/model/Theme'
@@ -583,23 +581,5 @@ struct BookDetailPage {
     .width(CommonConstants.FULL_WIDTH)
     .backgroundColor($r('app.color.book_detail_background'))
     }
-  }
-
-  // @StorageLink('BOOK_IS_BOOK_HISTORY_REFRESHING') isBookHistoryRefreshing: number = 0
-  //跳转阅读界面更新或者添加阅读历史记录方法
-  async jumpReadPage(durChapterTitle: string, durChapterIndex: number) {
-    if (!this.canShowDetail()) return
-    let bookHistory = new BookHistory()
-    bookHistory.id = this.bookData.id
-    bookHistory.bookName = this.bookData.bookName
-    bookHistory.author = this.bookData.author
-    bookHistory.durChapterTime = Date.now()
-    bookHistory.bookType = this.bookData.bookType
-    bookHistory.bookUrl = this.bookData.bookUrl ?? ''
-    bookHistory.coverUrl = this.bookData.coverUrl ?? ''
-    bookHistory.originBookId = this.bookData.id
-    bookHistory.durChapterTitle = durChapterTitle
-    bookHistory.durChapterIndex = durChapterIndex
-    bookHistoryUtils.addBooks(bookHistory)
   }
 }

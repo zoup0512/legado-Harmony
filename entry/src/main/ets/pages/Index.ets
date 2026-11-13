@@ -1,11 +1,9 @@
 import Logger from '../common/utils/Logger';
-import ReadShow from '../componets/common/ReadShow'
 import { NavItem } from '../componets/dataList/type'
 import BookShelf from './view/BookShelf'
 import PrivacyFolderView from './view/myCenter/PrivacyFolderView'
 import MyCenter from './view/myCenter/MyCenter'
 import { emitter } from '@kit.BasicServicesKit'
-import { JSON } from '@kit.ArkTS'
 import { image } from '@kit.ImageKit'
 import { ThemeStorageKey } from '../common/constants/Theme'
 import { ThemeItem } from '../common/model/Theme'
@@ -20,9 +18,7 @@ const MINE_TAB: number = 2
 @Entry
 @Component
 struct Main {
-  @State showReadShow: boolean = true
   @State currentTabIndex: number = 0
-  @State isShow: boolean = true
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
   tabController: TabsController = new TabsController()
@@ -64,11 +60,6 @@ struct Main {
     // 退出阅读页面后显示状态栏
     WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());
     this.applyStatusBarColor()
-    // initBookListData()
-    setTimeout(() => {
-      this.showReadShow = false
-      this.isShow = false
-    }, 5000)
   }
 
   screenShot() {
@@ -182,10 +173,6 @@ struct Main {
       .onChange((index: number) => {
         this.switchTab(index)
       })
-
-      if (this.showReadShow) {
-        ReadShow({ showReadShow: this.showReadShow }).offset({ y: -150 - this.bottomRectHeight })
-      }
     }
     .width("100%")
     .height("100%")

@@ -39,7 +39,7 @@ class BooksDao {
       (): Promise<PrivacyOwnershipLookup> => this.loadPrivacyOwnership());
   }
 
-  // Direct persisted IDs only: unlike book/history checks, this does not expand path aliases.
+  // Direct persisted IDs only: unlike book checks, this does not expand path aliases.
   async isPrivateBookIds(ids: number[]): Promise<boolean> {
     if (ids.length === 0) return false;
     const column = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['id']);

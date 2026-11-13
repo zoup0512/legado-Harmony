@@ -6,10 +6,7 @@
 import groupTypeComponent from '../../../../componets/group/GroupType'
 import IndexSearchType from '../../../../componets/head/IndexSearchType'
 import { router } from '@kit.ArkUI'
-import confirmDialogExample from '../../../../componets/common/confirmDialog'
 import BookContentRefresh from './BookContentRefresh'
-import bookHistoryUtils from '../../../../common/utils/BookHistoryUtils'
-import { showMessage } from '../../../../componets/common/promptShow'
 
 @Component
 export default struct BookBodyContent {
@@ -26,7 +23,6 @@ export default struct BookBodyContent {
   @State showGroupStrip: boolean = false
   @State bookBodyIndex: number = 0
   tabsBookBodyController: TabsController = new TabsController();
-  @StorageLink('BOOK_IS_BOOK_HISTORY_REFRESHING') isBookHistoryRefreshing: number = 0
   build() {
     Column() {
       Flex(
@@ -43,57 +39,37 @@ export default struct BookBodyContent {
           }) {
             Row({ space: 15 }) {
               IndexSearchType({ title: this.title, searchValue: this.searchValue })
-              IndexSearchType({ title: '浏览历史', searchValue: this.searchValue })
+              this.ExhibitBuilder()
+              Text('管理')
                 .onClick(() => {
-                  this.GROUP = '标签'
-                  this.searchValue = '浏览历史'
-                })
-              if (this.searchValue !== '浏览历史') {
-                this.ExhibitBuilder()
-                Text('管理')
-                  .onClick(() => {
-                    router.pushUrl({
-                      url: 'pages/view/bookShelf/Manage/BookManagePage',
-                      params: {
-                        currentIndex: this.currentIndex,
-                        EXHIBIT: this.EXHIBIT,
-                        bookTypeNumber: this.bookTypeNumber
-                      }
-                    })
+                  router.pushUrl({
+                    url: 'pages/view/bookShelf/Manage/BookManagePage',
+                    params: {
+                      currentIndex: this.currentIndex,
+                      EXHIBIT: this.EXHIBIT,
+                      bookTypeNumber: this.bookTypeNumber
+                    }
                   })
-                  .fontColor('rgba(0,0,0,0.5)')
-                  .fontSize(15)
-                  .fontWeight(400)
-              }
+                })
+                .fontColor('rgba(0,0,0,0.5)')
+                .fontSize(15)
+                .fontWeight(400)
             }
           }
         }
         .scrollBar(BarState.Off)
         .scrollable(ScrollDirection.Horizontal)
-
-        if (this.searchValue === '浏览历史') {
-          Row() {
-            Text('清空')
-              .onClick(() => {
-                if (this.IndexShelf != null) {
-                  this.IndexShelf.open()
-                }
-              })
-          }
-        }
       }
       .padding(15)
 
       Stack() {
-        if (this.searchValue !== '浏览历史') {
-          groupTypeComponent({
-            bookTypeNumber:this.bookTypeNumber,
-            currentIndex: this.currentIndex,
-            groupCoverShow: this.groupCoverShow,
-            GROUP: this.GROUP,
-            showGroupStrip: this.showGroupStrip
-          }).zIndex(999)
-        }
+        groupTypeComponent({
+          bookTypeNumber:this.bookTypeNumber,
+          currentIndex: this.currentIndex,
+          groupCoverShow: this.groupCoverShow,
+          GROUP: this.GROUP,
+          showGroupStrip: this.showGroupStrip
+        }).zIndex(999)
         Tabs({
           controller:this.tabsBookBodyController,
           index: this.bookBodyIndex
@@ -122,32 +98,6 @@ export default struct BookBodyContent {
       .alignContent(Alignment.Top)
     }
   }
-  @State delCache: boolean = false
-  IndexShelf: CustomDialogController | null = new CustomDialogController({
-    builder: confirmDialogExample({
-      confirm: () => {
-        this.onAccept()
-      },
-      title: '清空',
-      delCache: this.delCache
-    }),
-    autoCancel: true,
-    alignment: DialogAlignment.Center,
-    // offset: { dx: 0, dy: '-40%' },
-    gridCount: 4,
-    customStyle: false,
-    cornerRadius: 25
-  })
-
-  onAccept() {
-    bookHistoryUtils.deleteAllBookHistory()
-    setTimeout(() => {
-      this.isBookHistoryRefreshing++
-      showMessage('清空成功!')
-    },200)
-  }
-
-
   @Builder
   ExhibitBuilder() {
     Row({ space: 10 }) {

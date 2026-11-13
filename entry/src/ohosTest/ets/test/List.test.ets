@@ -15,6 +15,7 @@ import bookAccessCheckTest from './BookAccessCheck.test'
 import bookAccessStateTest from './BookAccessState.test'
 import privateBookAutoUnlockTest from './PrivateBookAutoUnlock.test'
 import dbUtilQueryTest from './DbUtilQuery.test'
+import databaseInitTest from './DatabaseInit.test'
 import loggerTest from './Logger.test'
 import marketUpdateControllerTest from './MarketUpdateController.test'
 
@@ -36,6 +37,7 @@ export default function testsuite() {
   bookAccessStateTest()
   privateBookAutoUnlockTest()
   dbUtilQueryTest()
+  databaseInitTest()
   loggerTest()
   marketUpdateControllerTest()
 }

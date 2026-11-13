@@ -45,7 +45,7 @@ A successful import means that a file has been saved, not that every file can be
 - Change the PIN from the unlocked privacy folder. Optional biometric unlock is off by default and requires the current PIN and a successful system authentication before enabling.
 - A forgotten PIN can only be reset with biometrics enabled beforehand. If unavailable, authentication cannot be bypassed; private books are not automatically deleted or made public. Keep the PIN safe.
 - Existing private books without a PIN require the previous biometric authentication before setting one, preventing an unauthenticated visitor from taking over old data.
-- Leaving the application locks access and hides private lists, details, chapters and book content. Private books are not written to public reading history; existing history is filtered against current private ownership.
+- Leaving the application locks access and hides private lists, details, chapters and book content.
 - The application no longer actively restricts system screenshots or screen recording. Locking access and hiding private pages when leaving the application do not guarantee that recent-task snapshots are obscured.
 - This is in-app access control, not file encryption or a replacement for the device lock screen and backups. It does not prevent authorized sandbox extraction tools or external cameras from obtaining content.
 

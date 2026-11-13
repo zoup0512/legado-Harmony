@@ -98,7 +98,7 @@ export default struct BookContent {
     } else if (this.bookList.length === 0){
       Column() {
         Image($r('app.media.no_record')).width(200).height(200)
-        Text('暂无浏览记录')
+        Text('书架暂无书籍')
           .fontSize(12)
           .fontColor('rgba(96, 96, 96, 0.6)')
           .fontWeight(500)
