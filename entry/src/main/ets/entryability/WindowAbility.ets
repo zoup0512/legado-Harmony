@@ -158,6 +158,20 @@ export class WindowAbility {
   }
 
   /**
+   * 设置状态栏文字/图标颜色（沉浸式页面根据背景深浅切换黑/白）。
+   */
+  setStatusBarContentColor(color: string, windowContext: Context | undefined): void {
+    window.getLastWindow(windowContext, (err, windowClass) => {
+      if (err.code) {
+        return;
+      }
+      windowClass.setWindowSystemBarProperties({ statusBarContentColor: color }).catch((error: Error) => {
+        Logger.error('WindowAbility.setStatusBarContentColor failed', Logger.errorSummary(error));
+      });
+    });
+  }
+
+  /**
    * 将系统栏设置为可见。
    *
    * @param { Array<'status' | 'navigation'> } names - 系统栏的设置

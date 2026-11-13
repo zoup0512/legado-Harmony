@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B4A9B9FC0C4A04376E99DA7B6A7040AE9095B0C6B207BDC268DF53782A3D17E062EB9C3F2466146",
+          "keyPassword": "0000001BB70B59A49D39F54510A300BC62487341774EFA922BAB4BCD32A853589DC5870D72AD7F148B84A4",
           "profile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p12",
-          "storePassword": "0000001BE93F9381470B057C78F594C4858CBEA7A05E39AE57289E964F18470822A6097A21FFF90849D28C"
+          "storePassword": "0000001BAC1B079AEDA646F60800EEE64474109612E6CDF785F7B0FA18970B373C90127CFDC17F36AEAAAF"
         }
       }
     ],
@@ -21,7 +21,7 @@
         "signingConfig": "default",
         "compatibleSdkVersion": "5.0.4(16)",
         "runtimeOS": "HarmonyOS",
-        "targetSdkVersion": "6.1.1(24)"
+        "targetSdkVersion": "26.0.0"
       }
     ]
   },

@@ -215,21 +215,46 @@ export default struct PrivacyFolderView {
   }
 
   build() {
-    Column({ space: 16 }) {
-      if (this.embedded) {
-        // 与“书架”标题样式保持一致
+    if (this.embedded) {
+      // 首页 Tab：与“书架”一致，顶部（含状态栏）为主题色渐变沉浸式背景
+      Column() {
         Row() {
           Text('隐私文件夹')
-            .fontSize(24)
+            .fontSize(25)
             .fontWeight(700)
-            .fontColor('rgba(0,0,0,0.9)')
+            .lineHeight(30)
+            .fontColor(this.theme.mainColor)
         }
         .width('100%')
-        .height(44)
-        .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight })
-      } else {
-        Header({ title: '隐私文件夹' }).width('100%').margin({ bottom: 4 })
+        .height(40)
+        .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight, bottom: 12 })
+        .padding({ left: 20, right: 20 })
+
+        Column({ space: 16 }) {
+          this.BodyContent()
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ left: 20, right: 20, top: 16, bottom: 16 })
+        .backgroundColor(Color.White)
       }
+      .width('100%')
+      .height('100%')
+      .linearGradient({
+        direction: GradientDirection.Bottom,
+        colors: [[this.theme.mainColor, 0], [this.theme.secondColor, 0.2]]
+      })
+    } else {
+      Column({ space: 16 }) {
+        Header({ title: '隐私文件夹' }).width('100%').margin({ bottom: 4 })
+        this.BodyContent()
+      }.width('100%').height('100%').padding({ left: 20, right: 20, top: 0, bottom: 16 })
+      .backgroundColor('#F6F7F9')
+    }
+  }
+
+  @Builder
+  BodyContent() {
       if (!this.unlocked) {
         Column({ space: 18 }) {
           Image($r('sys.symbol.lock')).width(56).height(56).fillColor(this.theme.mainColor)
@@ -295,7 +320,5 @@ export default struct PrivacyFolderView {
           .margin({ left: -10, right: -10 })
         }
       }
-    }.width('100%').height('100%').padding({ left: 20, right: 20, top: 0, bottom: 16 })
-      .backgroundColor('#F6F7F9')
   }
 }

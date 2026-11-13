@@ -2,6 +2,8 @@ import { router } from '@kit.ArkUI'
 import BookBodyContent from './components/BookBodyContent'
 import { IconTitleVo } from '../../../componetsmodel/IconTitleVo'
 import dialogTitleFuction from '../../../componets/common/dialogTitleFuction'
+import { ThemeItem } from '../../../common/model/Theme'
+import { ThemeStorageKey } from '../../../common/constants/Theme'
 
 @Component
 export default struct IndexShelf {
@@ -23,21 +25,25 @@ export default struct IndexShelf {
   }
 
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  // 主题颜色：顶部（含状态栏）为主题色渐变沉浸式背景
+  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
 
   build() {
     Column() {
       Row() {
         Text('书架')
-          .fontSize(24)
+          .fontSize(25)
           .fontWeight(700)
-          .fontColor('rgba(0,0,0,0.9)')
+          .lineHeight(30)
+          .fontColor(this.theme.mainColor)
         Blank()
         Image($r('app.media.more')).width(24)
           .bindMenu(this.MenuBuilder())
       }
       .width('100%')
-      .height(44)
-      .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight })
+      .height(40)
+      .alignItems(VerticalAlign.Center)
+      .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight, bottom: 12 })
       .padding({ left: 20, right: 20 })
 
       Column() {
@@ -49,9 +55,14 @@ export default struct IndexShelf {
         })
       }
       .layoutWeight(1)
+      .backgroundColor(Color.White)
     }
     .height('100%')
-    .backgroundColor(Color.White)
+    // 沉浸式主题：从状态栏开始由主色渐变到浅色，内容区为白底
+    .linearGradient({
+      direction: GradientDirection.Bottom,
+      colors: [[this.theme.mainColor, 0], [this.theme.secondColor, 0.2]]
+    })
   }
 
   @Builder

@@ -1,6 +1,8 @@
 import router from '@ohos.router'
 import { dataItem } from '../../../componets/dataList/dataItem'
 import { PublicConstants } from '../../../common/constants/PublicConstants'
+import { ThemeStorageKey } from '../../../common/constants/Theme'
+import { ThemeItem } from '../../../common/model/Theme'
 import { ColumnModifier } from '../../../common/utils/ComponetModifier'
 
 @Entry
@@ -11,6 +13,8 @@ export default struct MyCenter {
     new dataItem("关于我们", 2, $r("app.media.my_center_about_icon")),
   ]
   Column = new ColumnModifier()
+  // 主题颜色：顶部（含状态栏）为主题色渐变沉浸式背景，与书架一致
+  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
 
   build() {
     Column() {
@@ -50,8 +54,11 @@ export default struct MyCenter {
       .scrollBar(BarState.Off)
       .padding({ bottom: 10 })
     }
-    // 素色背景（ColumnModifier 默认浅灰），白色卡片承载菜单，不再用主题色渐变
     .attributeModifier(this.Column)
+    .linearGradient({
+      direction: GradientDirection.Bottom, // 渐变方向
+      colors: [[this.theme.mainColor, 0.0], [this.theme.secondColor, 0.2]]
+    })
     .height('100%')
   }
 

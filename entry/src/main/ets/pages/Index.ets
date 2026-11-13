@@ -10,6 +10,7 @@ import { image } from '@kit.ImageKit'
 import { ThemeStorageKey } from '../common/constants/Theme'
 import { ThemeItem } from '../common/model/Theme'
 import { WindowAbility } from '../entryability/WindowAbility'
+import { statusBarContentColorFor } from '../common/utils/ThemeManager'
 import BrightnessUtil from '../../common/utils/BrightnessUtil'
 
 const SHELF_TAB: number = 0
@@ -26,7 +27,7 @@ struct Main {
   @StorageLink('topRectHeight') topRectHeight: number = 0
   tabController: TabsController = new TabsController()
   // 主题颜色
-  @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
+  @StorageProp(ThemeStorageKey.THEME) @Watch('applyStatusBarColor') theme: ThemeItem = {} as ThemeItem
   // 首页是否在前台；隐私 Tab 只有在首页可见且选中时才加载私密书籍
   @State pageVisible: boolean = true
   // 每次主动切到隐私 Tab 时递增，触发一次指纹/人脸自动解锁
@@ -34,6 +35,15 @@ struct Main {
 
   onPageHide(): void {
     this.pageVisible = false
+    // 其他页面都是浅色背景，离开首页时恢复黑色状态栏文字
+    WindowAbility.getInstance().setStatusBarContentColor('#000000', this.getUIContext().getHostContext())
+  }
+
+  // 首页顶部是主题色沉浸式背景，状态栏文字随主题深浅切换黑/白
+  applyStatusBarColor() {
+    if (!this.pageVisible) return
+    WindowAbility.getInstance().setStatusBarContentColor(statusBarContentColorFor(this.theme.mainColor),
+      this.getUIContext().getHostContext())
   }
 
   switchTab(targetIndex: number) {
@@ -53,6 +63,7 @@ struct Main {
     BrightnessUtil.setBrightness('default', -1)
     // 退出阅读页面后显示状态栏
     WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());
+    this.applyStatusBarColor()
     // initBookListData()
     setTimeout(() => {
       this.showReadShow = false

@@ -81,5 +81,30 @@ export class ThemeManager {
   }
 }
 
+/**
+ * 根据主题主色深浅返回状态栏文字颜色：深色主题用白字，浅色主题用黑字。
+ * 按 WCAG 相对亮度比较与黑、白的对比度。
+ */
+export function statusBarContentColorFor(mainColor: string | undefined): string {
+  let hex = (mainColor ?? '').replace('#', '')
+  if (hex.length === 3) {
+    hex = hex.split('').map((c: string): string => c + c).join('')
+  }
+  if (hex.length === 8) {
+    hex = hex.substring(2)
+  }
+  if (hex.length !== 6) {
+    return '#000000'
+  }
+  const channel = (start: number): number => {
+    const v = parseInt(hex.substring(start, start + 2), 16) / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+  const contrastWithWhite = 1.05 / (luminance + 0.05)
+  const contrastWithBlack = (luminance + 0.05) / 0.05
+  return contrastWithWhite > contrastWithBlack ? '#FFFFFF' : '#000000'
+}
+
 // 单例模式
 export const themeManager = new ThemeManager()
