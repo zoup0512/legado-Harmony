@@ -29,10 +29,12 @@ class routerParams {
   currentIndex:number
   EXHIBIT:string
   bookTypeNumber:number
+  selectedId?:number // 长按书籍进入时预选的书籍
   constructor(param:routerParams) {
     this.currentIndex = param.currentIndex
     this.EXHIBIT = param.EXHIBIT
     this.bookTypeNumber = param.bookTypeNumber
+    this.selectedId = param.selectedId
   }
 }
 /**
@@ -44,6 +46,7 @@ struct BookManagePage {
   @State currentIndex: number = (router.getParams() as routerParams).currentIndex
   @State EXHIBIT: string = (router.getParams() as routerParams).EXHIBIT
   @State bookTypeNumber:number = (router.getParams() as routerParams).bookTypeNumber
+  private pendingSelectedId: number | undefined = (router.getParams() as routerParams).selectedId
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @State isAddShelfShow:boolean = false
@@ -108,6 +111,14 @@ struct BookManagePage {
     const books = await booksDao.searchPage({ type: this.currentIndex, bookGroup: this.bookTypeNumber }, 1, 100);
     if (generation !== privacySessionService.getGeneration()) return;
     this.bookList = books;
+    const selectedId = this.pendingSelectedId;
+    this.pendingSelectedId = undefined;
+    if (selectedId !== undefined && books.some((item: Books) => item.id === selectedId)) {
+      const checks: Record<number, boolean> = {};
+      checks[selectedId] = true;
+      this.checkLists = checks;
+      this.listenCheckList();
+    }
   }
   //分组
   getGroupList(){

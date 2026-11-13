@@ -342,6 +342,7 @@ struct ReaderPage3 {
       this.BookHandler = runtime.parser;
       const catalog = runtime.parser.getCatalogList() || [];
       if (catalog.length === 0) throw new Error('书籍内容为空或格式不受支持');
+      this.localizeTxtPreface(localPath, catalog);
       this.CatalogList.clear();
       this.CatalogList.pushAllData(catalog);
       const safeIndex = Math.max(0, Math.min(resourceIndex || 0, catalog.length - 1));
@@ -1174,6 +1175,20 @@ struct ReaderPage3 {
       return undefined
     }
     return this.CatalogList.getData(index)
+  }
+
+  /**
+   * ReaderKit 解析 TXT 时，会把首个章节标题之前的内容命名为英文 "preface"，这里统一显示为“前言”
+   */
+  private localizeTxtPreface(localPath: string, catalog: bookParser.CatalogItem[]): void {
+    if (!localPath.toLowerCase().endsWith('.txt')) {
+      return
+    }
+    catalog.forEach((item: bookParser.CatalogItem) => {
+      if ((item.catalogName ?? '').trim().toLowerCase() === 'preface') {
+        item.catalogName = '前言'
+      }
+    })
   }
 
   private currentCatalogTitle(): string {

@@ -1,50 +1,69 @@
 import { ThemeColor, ThemeStorageKey } from "../constants/Theme";
 import { ThemeItem } from "../model/Theme";
 
-const DEFAULT_THEME: ThemeItem = {
+const INDIGO_THEME: ThemeItem = {
   text: '黛蓝', mainColor: ThemeColor.INDIGO.mainColor, secondColor: ThemeColor.INDIGO.secondColor
+}
+
+// 默认主题：主题3（绿色）
+const DEFAULT_THEME: ThemeItem = {
+  text: '主题3', mainColor: ThemeColor.GREEN.mainColor, secondColor: ThemeColor.GREEN.secondColor
 }
 
 export class ThemeManager {
   defaultTheme: ThemeItem = DEFAULT_THEME
   themeList: ThemeItem[] = [
-    DEFAULT_THEME,
+    INDIGO_THEME,
     {text: '主题2', mainColor: ThemeColor.RED.mainColor, secondColor: ThemeColor.RED.secondColor},
-    {text: '主题3', mainColor: ThemeColor.GREEN.mainColor, secondColor: ThemeColor.GREEN.secondColor},
+    DEFAULT_THEME,
     {text: '主题4', mainColor: ThemeColor.YELLOW.mainColor, secondColor: ThemeColor.YELLOW.secondColor},
     {text: '主题5', mainColor: ThemeColor.BLUE.mainColor, secondColor: ThemeColor.BLUE.secondColor},
     {text: '主题6', mainColor: ThemeColor.ORANGE.mainColor, secondColor: ThemeColor.ORANGE.secondColor},
   ]
+  defaultIndex: number = 2 // 默认主题在列表中的索引
 
   init() {
     PersistentStorage.persistProp<ThemeItem>(ThemeStorageKey.THEME, this.defaultTheme)
     PersistentStorage.persistProp<string>(ThemeStorageKey.THEMELISTSTR, JSON.stringify(this.themeList))
-    PersistentStorage.persistProp<number>(ThemeStorageKey.THEMEINDEX, 0) // 被选中主题的索引
+    PersistentStorage.persistProp<number>(ThemeStorageKey.THEMEINDEX, this.defaultIndex) // 被选中主题的索引
     PersistentStorage.persistProp<boolean>(ThemeStorageKey.DEFAULT_MIGRATED, false)
+    PersistentStorage.persistProp<boolean>(ThemeStorageKey.DEFAULT_GREEN_MIGRATED, false)
 
     // 解析主题数组字符串 加载主题
     const str = AppStorage.get<string>(ThemeStorageKey.THEMELISTSTR)
     let themeList = JSON.parse(str as string) as ThemeItem[]
-    if (!AppStorage.get<boolean>(ThemeStorageKey.DEFAULT_MIGRATED)) {
-      themeList = this.migrateOrangeDefault(themeList)
+    if (!AppStorage.get<boolean>(ThemeStorageKey.DEFAULT_GREEN_MIGRATED)) {
+      themeList = this.migrateLegacyDefault(themeList)
       AppStorage.setOrCreate<boolean>(ThemeStorageKey.DEFAULT_MIGRATED, true)
+      AppStorage.setOrCreate<boolean>(ThemeStorageKey.DEFAULT_GREEN_MIGRATED, true)
     }
     AppStorage.setOrCreate<ThemeItem[]>(ThemeStorageKey.THEMELIST, themeList)
   }
 
-  // 旧版本默认是橙色主题：补上黛蓝主题；仍在用旧默认橙色的用户切到黛蓝，自选其他主题的不动
-  private migrateOrangeDefault(themeList: ThemeItem[]): ThemeItem[] {
+  // 旧版本默认主题依次为橙色、黛蓝：仍在用旧默认主题的用户切到绿色默认主题，自选其他主题的不动
+  private migrateLegacyDefault(themeList: ThemeItem[]): ThemeItem[] {
     const sameColor = (a: string, b: string): boolean => (a ?? '').toLowerCase() === b.toLowerCase()
+    const indexOf = (color: string): number =>
+      themeList.findIndex((item: ThemeItem): boolean => sameColor(item.mainColor, color))
     let activeIndex = AppStorage.get<number>(ThemeStorageKey.THEMEINDEX) ?? 0
-    if (!themeList.some((item: ThemeItem): boolean => sameColor(item.mainColor, this.defaultTheme.mainColor))) {
-      themeList.unshift(this.defaultTheme)
+    let changed = false
+    // 橙色时代的旧列表缺少黛蓝主题
+    if (!AppStorage.get<boolean>(ThemeStorageKey.DEFAULT_MIGRATED) && indexOf(INDIGO_THEME.mainColor) < 0) {
+      themeList.unshift(INDIGO_THEME)
       activeIndex++
+      changed = true
+    }
+    if (indexOf(this.defaultTheme.mainColor) < 0) {
+      themeList.push(this.defaultTheme)
+      changed = true
+    }
+    if (changed) {
       AppStorage.setOrCreate(ThemeStorageKey.THEMELISTSTR, JSON.stringify(themeList))
     }
     const current = AppStorage.get<ThemeItem>(ThemeStorageKey.THEME)
-    if (!current || sameColor(current.mainColor, ThemeColor.ORANGE.mainColor)) {
-      const index = themeList.findIndex((item: ThemeItem): boolean =>
-        sameColor(item.mainColor, this.defaultTheme.mainColor))
+    if (!current || sameColor(current.mainColor, ThemeColor.ORANGE.mainColor) ||
+      sameColor(current.mainColor, ThemeColor.INDIGO.mainColor)) {
+      const index = indexOf(this.defaultTheme.mainColor)
       this.setTheme(themeList[index], index)
     } else {
       AppStorage.setOrCreate<number>(ThemeStorageKey.THEMEINDEX, activeIndex)

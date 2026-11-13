@@ -37,6 +37,10 @@ export default struct BookInfoDialogs{
   @Consume('booksDataSource')  booksDataSource: BasicDataSource<Books>
   cancel: () => void = () => {
   }
+  // 书架长按时提供“批量管理”入口；其他场景（如隐私文件夹）不传则不显示
+  batchManage: boolean = false
+  onBatchManage: () => void = () => {
+  }
 
   private unsubscribePrivacy: (() => void) | undefined
   private active: boolean = false
@@ -74,6 +78,9 @@ export default struct BookInfoDialogs{
       this.buttonListInfo = this.buttonListInfo.filter(item => item.id !== 5 && item.id !== 6)
       this.buttonListInfo.push(new buttonList(privateBook ? 5 : 6,
         privateBook ? '移出隐私' : '移入隐私', privateBook ? $r('app.media.folder') : $r('app.media.hide')))
+      if (this.batchManage) {
+        this.buttonListInfo.push(new buttonList(7, '批量管理', $r('app.media.shelf_manage')))
+      }
       this.contentVisible = true
     } catch (_) {
       this.controller?.close()
@@ -272,6 +279,11 @@ export default struct BookInfoDialogs{
 
   async bookInfoButton(id: number): Promise<void> {
     if (this.privacyBusy) return
+    if (id === 7) {
+      this.controller?.close()
+      this.onBatchManage()
+      return
+    }
     if (id !== 5 && id !== 6 && await this.authorizeCurrentBook() === undefined) return
     switch (id){
       case 1 :

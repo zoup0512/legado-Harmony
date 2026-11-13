@@ -19,6 +19,9 @@ import { showMessage } from '../../../../componets/common/promptShow'
 export default struct BookInfoGrids{
 
   @Prop book:Books
+  batchManage: boolean = false
+  onBatchManage: (book: Books) => void = () => {
+  }
 
   onDelete: () => void = () => {
 
@@ -143,6 +146,10 @@ export default struct BookInfoGrids{
   }
   bookInfoDialog: CustomDialogController | null = new CustomDialogController({
     builder: BookInfoDialogs({
+      batchManage: this.batchManage,
+      onBatchManage: () => {
+        this.onBatchManage(this.book)
+      },
       bookData:this.book,
       cancel: () => {
         this.exitDialog()

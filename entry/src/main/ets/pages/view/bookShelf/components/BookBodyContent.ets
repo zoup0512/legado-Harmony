@@ -5,14 +5,12 @@
  */
 import groupTypeComponent from '../../../../componets/group/GroupType'
 import IndexSearchType from '../../../../componets/head/IndexSearchType'
-import { router } from '@kit.ArkUI'
 import BookContentRefresh from './BookContentRefresh'
 
 @Component
 export default struct BookBodyContent {
   @Prop index:number
   @Prop currentIndex: number = 0
-  @State EXHIBIT_NAMES: string[] = ['列表', '宫格']
   @Link EXHIBIT: string
   @Link GROUP: string
   @State searchValue: string = '最近阅读'
@@ -25,42 +23,13 @@ export default struct BookBodyContent {
   tabsBookBodyController: TabsController = new TabsController();
   build() {
     Column() {
-      Flex(
-        {
-          alignContent: FlexAlign.Center,
-          alignItems: ItemAlign.Center,
-          justifyContent: FlexAlign.SpaceBetween
-        }
-      ) {
-        Scroll() {
-          Flex({
-            alignItems: ItemAlign.Center,
-            justifyContent: FlexAlign.SpaceBetween
-          }) {
-            Row({ space: 15 }) {
-              IndexSearchType({ title: this.title, searchValue: this.searchValue })
-              this.ExhibitBuilder()
-              Text('管理')
-                .onClick(() => {
-                  router.pushUrl({
-                    url: 'pages/view/bookShelf/Manage/BookManagePage',
-                    params: {
-                      currentIndex: this.currentIndex,
-                      EXHIBIT: this.EXHIBIT,
-                      bookTypeNumber: this.bookTypeNumber
-                    }
-                  })
-                })
-                .fontColor('rgba(0,0,0,0.5)')
-                .fontSize(15)
-                .fontWeight(400)
-            }
-          }
-        }
-        .scrollBar(BarState.Off)
-        .scrollable(ScrollDirection.Horizontal)
+      Row() {
+        IndexSearchType({ title: this.title, searchValue: this.searchValue })
+        Blank()
+        this.ExhibitBuilder()
       }
-      .padding(15)
+      .width('100%')
+      .padding({ left: 15, right: 9, top: 9, bottom: 9 })
 
       Stack() {
         groupTypeComponent({
@@ -100,21 +69,17 @@ export default struct BookBodyContent {
   }
   @Builder
   ExhibitBuilder() {
-    Row({ space: 10 }) {
-      ForEach(this.EXHIBIT_NAMES, (item: string) => {
-        if (item !== this.EXHIBIT) {
-          IndexSearchType({ title: item, searchValue: this.searchValue })
-            .onClick(() => {
-              this.EXHIBIT = item
-            })
-          Divider()
-            .vertical(true)
-            .height(15)
-            .color('#989797')
-            .opacity(0.5)
-            .strokeWidth(1)
-        }
-      })
+    Row({ space: 4 }) {
+      Image($r('app.media.view_list'))
+        .width(34).height(34).padding(6)
+        .fillColor(this.EXHIBIT === '列表' ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.35)')
+        .accessibilityText('列表视图')
+        .onClick(() => { this.EXHIBIT = '列表' })
+      Image($r('app.media.view_grid'))
+        .width(34).height(34).padding(6)
+        .fillColor(this.EXHIBIT === '宫格' ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.35)')
+        .accessibilityText('宫格视图')
+        .onClick(() => { this.EXHIBIT = '宫格' })
     }
   }
 }

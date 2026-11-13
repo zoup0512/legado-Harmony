@@ -23,7 +23,7 @@ export default struct PrivacyFolderView {
   @Prop embedded: boolean = false;
   @StorageLink('topRectHeight') topRectHeight: number = 0;
   @StorageLink(ThemeStorageKey.THEME) theme: ThemeItem = {
-    mainColor: '#3d5a80', secondColor: '#e8eef6', text: '黛蓝'
+    mainColor: '#24b277', secondColor: '#e4f5ee', text: '主题3'
   };
   @State unlocked: boolean = false;
   @State books: Books[] = [];

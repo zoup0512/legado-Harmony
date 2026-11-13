@@ -5,6 +5,7 @@ import booksDao from '../../../../database/dao/BooksDao'
 import { Books } from '../../../../database/entities/Books'
 import BookInfoGrids from './BookInfoGrids'
 import BookInfos from './BookInfos'
+import { router } from '@kit.ArkUI'
 
 @Component
 export default struct BookContent {
@@ -40,6 +41,19 @@ export default struct BookContent {
     if (this.isBookRefreshing >= 0) {
       await Promise.all([this.getBookCount(), this.getBookList()])
     }
+  }
+
+  // 长按书籍进入批量管理，并预先选中该书
+  openManage(book: Books) {
+    router.pushUrl({
+      url: 'pages/view/bookShelf/Manage/BookManagePage',
+      params: {
+        currentIndex: this.currentIndex,
+        EXHIBIT: this.EXHIBIT,
+        bookTypeNumber: this.bookTypeNumber,
+        selectedId: book.id
+      }
+    })
   }
 
   changeBookType(){
@@ -114,11 +128,15 @@ export default struct BookContent {
           ListItem(){
             if (this.EXHIBIT === '宫格') {
               BookInfoGrids({
-                book:item
+                book:item,
+                batchManage: true,
+                onBatchManage: (book: Books) => { this.openManage(book) }
               })
             } else {
               BookInfos({
-                book:item
+                book:item,
+                batchManage: true,
+                onBatchManage: (book: Books) => { this.openManage(book) }
               })
             }
           }

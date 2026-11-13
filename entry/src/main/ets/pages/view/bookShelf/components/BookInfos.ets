@@ -16,9 +16,16 @@ import { showMessage } from '../../../../componets/common/promptShow'
 export default struct BookInfos {
   @Prop currentIndex: number
   @Prop book: Books
+  batchManage: boolean = false
+  onBatchManage: (book: Books) => void = () => {
+  }
   @State delCache: boolean = false
   bookInfoDialog: CustomDialogController | null = new CustomDialogController({
     builder: BookInfoDialogs({
+      batchManage: this.batchManage,
+      onBatchManage: () => {
+        this.onBatchManage(this.book)
+      },
       bookData: this.book, cancel: () => {
         this.exitDialog()
       }
