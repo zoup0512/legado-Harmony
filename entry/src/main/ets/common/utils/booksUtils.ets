@@ -4,6 +4,13 @@ import bookGroupUtils from './bookGroupUtils'
 import toolsUtils from './ToolsUtils'
 import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants'
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard'
+import { PreferencesUtil } from '@pura/harmony-utils'
+import Logger from './Logger'
+
+export const BOOK_NAME_MAX_LENGTH: number = 50
+
+// 阅读进度、阅读设置以书名为 key 存储
+const BOOK_PREFERENCE_KEY_PREFIXES: string[] = ['BookCurrentData_', 'ReaderSetting_']
 
 class booksUtils{
   async isTopBook(id: number | number[], isTop: boolean,
@@ -80,6 +87,51 @@ class booksUtils{
     } catch (_) {
       return false
     }
+  }
+
+  /**
+   * 修改书籍显示名称。书名同时是阅读进度/设置的存储 key，因此要求唯一，并迁移对应缓存
+   * @returns 失败原因，成功返回 undefined
+   */
+  async renameBook(book: Books, newName: string,
+    generation: number = capturePrivacyGeneration()): Promise<string | undefined> {
+    const name = newName.trim()
+    const oldName = book.bookName ?? ''
+    if (name.length === 0) return '书名不能为空'
+    if (name.length > BOOK_NAME_MAX_LENGTH) return `书名最长${BOOK_NAME_MAX_LENGTH}个字符`
+    if (name === oldName) return undefined
+    if (!book.id) return '修改失败'
+    try {
+      const lowerName = name.toLowerCase()
+      const existing = await BooksDao.getExistingBookNames()
+      if (lowerName !== oldName.trim().toLowerCase() &&
+        existing.some((item: string) => item.trim().toLowerCase() === lowerName)) {
+        return '书架中已有同名书籍'
+      }
+      if (!await BooksDao.updateBookName(book.id, name, generation)) return '修改失败'
+      this.moveBookPreferences(oldName, name)
+      return undefined
+    } catch (_) {
+      return '修改失败'
+    }
+  }
+
+  private moveBookPreferences(oldName: string, newName: string): void {
+    BOOK_PREFERENCE_KEY_PREFIXES.forEach((prefix: string) => {
+      const oldKey = prefix + oldName
+      const newKey = prefix + newName
+      try {
+        if (PreferencesUtil.hasSync(oldKey)) {
+          PreferencesUtil.putSync(newKey, PreferencesUtil.getSync(oldKey, ''))
+          PreferencesUtil.deleteSync(oldKey)
+        } else if (PreferencesUtil.hasSync(newKey)) {
+          // 清理同名旧书残留，避免被当作本书的数据
+          PreferencesUtil.deleteSync(newKey)
+        }
+      } catch (_) {
+        Logger.warn('booksUtil.moveBookPreferences failed')
+      }
+    })
   }
 
   async getBookByIds(ids:number|number[]){

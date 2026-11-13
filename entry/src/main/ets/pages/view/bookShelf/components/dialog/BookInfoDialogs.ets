@@ -4,7 +4,8 @@ import { router } from '@kit.ArkUI'
 import InsideCircleIcon from '../../../../../componets/common/InsideCircleIcon'
 import { showMessage } from '../../../../../componets/common/promptShow'
 import confirmDialogExample from '../../../../../componets/common/confirmDialog'
-import booksUtil from '../../../../../common/utils/booksUtils'
+import booksUtil, { BOOK_NAME_MAX_LENGTH } from '../../../../../common/utils/booksUtils'
+import commonInputDialog from '../../../../../componets/common/commonInputDialog'
 import BookSelectGroupDialog from './BookSelectGroupDialog'
 import catalogAddShelf from '../../Manage/components/catalogAddShelf'
 import PaddingConstants from '../../../../../common/constants/PaddingConstants'
@@ -32,6 +33,7 @@ export default struct BookInfoDialogs{
     new buttonList(1,this.bookData.isTop?'取消置顶':'置顶',$r('app.media.top')),
     new buttonList(2,'移动至',$r('app.media.folder')),
     new buttonList(3,'加入书单',$r('app.media.shelf')),
+    new buttonList(8,'重命名',$r('app.media.edit')),
     new buttonList(4,'删除',$r('app.media.ic_public_delete'))
   ]
   @Consume('booksDataSource')  booksDataSource: BasicDataSource<Books>
@@ -54,6 +56,7 @@ export default struct BookInfoDialogs{
       this.contentVisible = false
       this.bookMoveGroup?.close()
       this.bookDelDialog?.close()
+      this.renameDialog?.close()
       this.isCatalogAddShelf = false
       this.controller?.close()
     })
@@ -298,7 +301,45 @@ export default struct BookInfoDialogs{
         this.confirmMoveOutPrivacy(); break;
       case 6 :
         this.confirmMoveToPrivacy(); break;
+      case 8 :
+        this.renameValue = this.bookData.bookName
+        this.renameDialog?.open(); break;
     }
+  }
+
+  //重命名弹窗
+  @State renameValue: string = ''
+  renameDialog: CustomDialogController | null = new CustomDialogController({
+    builder: commonInputDialog({
+      textValue: this.renameValue,
+      confirm: () => {
+        this.renameBook()
+      },
+      title: '修改书名',
+      placeholder: '请输入书名',
+      maxLength: BOOK_NAME_MAX_LENGTH
+    }),
+    gridCount: 4,
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: false,
+    cornerRadius: 25
+  })
+
+  async renameBook(): Promise<void> {
+    const generation = await this.authorizeCurrentBook()
+    if (generation === undefined) return
+    const newName = this.renameValue.trim()
+    if (newName === this.bookData.bookName) return
+    const error = await booksUtil.renameBook(this.bookData, newName, generation)
+    if (!this.isCurrent(generation)) return
+    if (error) {
+      showMessage(error)
+      return
+    }
+    this.isBookRefreshing++
+    this.controller?.close()
+    showMessage('书名已修改')
   }
 
   @State delCache:boolean = false

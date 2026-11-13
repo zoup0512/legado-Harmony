@@ -305,6 +305,26 @@ class BooksDao {
     }
   }
 
+  async updateBookName(id: number, bookName: string,
+    generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    try {
+      const column = AppDatabaseUtil.getColumn(this.TABLE_NAME);
+      const predicates = DbUtil.getPredicates(this.TABLE_NAME);
+      predicates.equalTo('id', id);
+      const books = await DbUtil.queryForList<Books>(predicates, column);
+      for (const book of books) {
+        if (!await this.canWriteBook(book, generation)) return false;
+        book.bookName = bookName;
+        book.updateTime = Date.now();
+        if (!await this.update(book, generation)) return false;
+      }
+      return books.length > 0;
+    } catch (err) {
+      Logger.error('BooksDao.updateBookName failed', Logger.errorSummary(err));
+      return false;
+    }
+  }
+
   async batchUpdateBookGroup(ids: number[], groupId: number): Promise<boolean> {
     return await this.updateBookGroup(ids, groupId);
   }
