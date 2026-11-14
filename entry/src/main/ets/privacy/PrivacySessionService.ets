@@ -26,6 +26,13 @@ export enum PrivacyAuthStage {
   ENABLE_BIOMETRIC = 'enableBiometric'
 }
 
+// Unlock priority: fingerprint > face > six-digit PIN.
+export enum PrivacyBiometricType {
+  FINGERPRINT = 'fingerprint',
+  FACE = 'face',
+  NONE = 'none'
+}
+
 export enum PrivacyBiometricPurpose {
   UNLOCK = 'unlock',
   LEGACY_PROOF = 'legacyProof',
@@ -219,6 +226,12 @@ export class PrivacySessionService {
         this.cancelAuthInstance();
       }
     }
+  }
+
+  getBiometricType(): PrivacyBiometricType {
+    if (this.isTypeAvailable(userAuth.UserAuthType.FINGERPRINT)) return PrivacyBiometricType.FINGERPRINT;
+    if (this.isTypeAvailable(userAuth.UserAuthType.FACE)) return PrivacyBiometricType.FACE;
+    return PrivacyBiometricType.NONE;
   }
 
   // True when the device has an enrolled fingerprint or face usable at ATL2.

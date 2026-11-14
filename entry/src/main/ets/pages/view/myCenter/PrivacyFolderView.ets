@@ -1,7 +1,7 @@
 import { promptAction, router } from '@kit.ArkUI';
 import { Books } from '../../../database/entities/Books';
 import privacyFolderService from '../../../privacy/PrivacyFolderService';
-import privacySessionService from '../../../privacy/PrivacySessionService';
+import privacySessionService, { PrivacyBiometricType } from '../../../privacy/PrivacySessionService';
 import privacyCredentialService from '../../../privacy/PrivacyCredentialService';
 import Header from '../../../componets/common/Header';
 import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
@@ -33,6 +33,7 @@ export default struct PrivacyFolderView {
   @State configured: boolean = false;
   // Enrolled fingerprint/face: unlock uses system biometrics; otherwise the six-digit PIN.
   @State biometricReady: boolean = false;
+  @State biometricType: PrivacyBiometricType = PrivacyBiometricType.NONE;
   @State credentialError: string = '';
   @State EXHIBIT: string = '列表';
   @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>();
@@ -100,6 +101,7 @@ export default struct PrivacyFolderView {
 
   private refreshBiometricReady(): void {
     this.biometricReady = privacySessionService.isBiometricAvailable();
+    this.biometricType = this.biometricReady ? privacySessionService.getBiometricType() : PrivacyBiometricType.NONE;
   }
 
   aboutToDisappear(): void {
@@ -203,13 +205,11 @@ export default struct PrivacyFolderView {
 
   private unlockLabel(): string {
     if (this.busy) return '认证中…';
-    if (this.biometricReady) return '指纹 / 人脸解锁';
     if (!this.credentialKnown) return '读取凭据中…';
     return this.configured ? '输入密码解锁' : '设置六位隐私密码';
   }
 
   private lockedHint(): string {
-    if (this.biometricReady) return '使用指纹或人脸验证后查看私密书籍';
     if (this.credentialKnown && !this.configured) return '设备未录入指纹或人脸，请设置六位隐私密码';
     return '解锁后查看你的私密书籍与文稿';
   }
@@ -255,7 +255,17 @@ export default struct PrivacyFolderView {
 
   @Builder
   BodyContent() {
-      if (!this.unlocked) {
+      if (!this.unlocked && this.biometricReady && this.biometricType !== PrivacyBiometricType.NONE) {
+        // 指纹/人脸：仅显示图标，点击重新拉起系统认证
+        Column() {
+          Image(this.biometricType === PrivacyBiometricType.FINGERPRINT ?
+            $r('app.media.privacy_fingerprint') : $r('app.media.privacy_face'))
+            .width(96).height(96)
+            .opacity(this.busy ? 0.5 : 1)
+            .accessibilityText(this.biometricType === PrivacyBiometricType.FINGERPRINT ? '指纹解锁' : '人脸解锁')
+            .onClick((): void => { this.unlock(); })
+        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
+      } else if (!this.unlocked) {
         Column({ space: 18 }) {
           Image($r('sys.symbol.lock')).width(56).height(56).fillColor(this.theme.mainColor)
           Text('私人阅读，独立保存').fontSize(20).fontWeight(FontWeight.Medium)

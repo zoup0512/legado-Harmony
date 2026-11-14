@@ -8,6 +8,8 @@ hvigor is not on PATH; use DevEco Studio's bundled node + hvigor:
 "C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe" "C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js" --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
 ```
 
+If it fails with "Invalid value of 'DEVECO_SDK_HOME'", set `DEVECO_SDK_HOME=C:\Program Files\Huawei\DevEco Studio\sdk` for the command.
+
 The build prints ~1000 pre-existing ArkTS warnings (deprecations, "Function may throw exceptions"); only `ERROR` lines matter.
 
 ## ArkTS gotchas
