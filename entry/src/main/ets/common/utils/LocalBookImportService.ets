@@ -8,6 +8,7 @@ import BooksDao from '../../database/dao/BooksDao';
 import { Books } from '../../database/entities/Books';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
 import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants';
+import bookCoverStore from './BookCoverStore';
 
 export const LOCAL_BOOK_FILE_SUFFIX_FILTERS: string[] = ['.txt', '.epub', '.mobi', '.azw', '.azw3'];
 export const LOCAL_BOOK_IMPORT_MAX_COUNT: number = 500;
@@ -616,6 +617,7 @@ export class LocalBookImportService {
     let tempPath = '';
     let finalPath = '';
     let finalCreated = false;
+    let coverPath = '';
     let stage = 'import.validate';
     try {
       verifyPrivacy();
@@ -690,6 +692,13 @@ export class LocalBookImportService {
       book.localFileSize = candidate.size;
       book.localFileModified = candidate.modifiedTime;
       book.localFileHash = candidate.contentHash;
+      if (bookCoverStore.mayHaveEmbeddedCover(finalPath)) {
+        stage = 'import.cover';
+        const extracted = await bookCoverStore.extractFromBookFile(finalPath);
+        coverPath = extracted.coverPath;
+        book.coverUrl = coverPath.length > 0 ? coverPath : undefined;
+        if (extracted.author.length > 0) book.author = extracted.author;
+      }
       stage = 'import.database';
       verifyPrivacy();
       const inserted = await BooksDao.insert(book, privacyGeneration);
@@ -698,6 +707,7 @@ export class LocalBookImportService {
       }
       // A lock during the DB await must stop later books, but retain this committed copy.
       finalCreated = false;
+      coverPath = '';
       const sessionStillValid = privacyAllowed();
       candidate.status = LocalBookImportStatus.IMPORTED;
       candidate.message = '导入成功';
@@ -727,6 +737,9 @@ export class LocalBookImportService {
       }
       if (finalCreated && finalPath.length > 0) {
         this.deleteFileQuietly(finalPath);
+      }
+      if (coverPath.length > 0) {
+        bookCoverStore.deleteCover(coverPath);
       }
     }
   }

@@ -153,7 +153,9 @@ struct Main {
                   embedded: true
                 })
               } else if (item.index === MINE_TAB) {
-                MyCenter()
+                MyCenter({
+                  visible: this.pageVisible && this.currentTabIndex === MINE_TAB
+                })
               }
             }
           }.tabBar(

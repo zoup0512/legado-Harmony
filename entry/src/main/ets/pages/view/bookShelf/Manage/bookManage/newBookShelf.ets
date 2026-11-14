@@ -13,8 +13,8 @@ import { Books } from '../../../../../database/entities/Books'
 import { WorksBookList } from '../../../../../database/entities/WorksBookList'
 import { WorksLists, WORK_BOOK_LIST_STATUS } from '../../../../../database/entities/WorksLists'
 import newAddShelf from './newAddShelf'
-import { LocalBookAccessLogic } from '../../../../../common/utils/LocalBookAccess'
 import { getPrivacyGeneration } from '../../../../../privacy/PrivacyAccessGuard'
+import BookCover from '../../../../../componets/common/BookCover'
 
 @Component
 export default struct newBookShelf{
@@ -388,11 +388,14 @@ export default struct newBookShelf{
             Text('置顶').fontColor(Color.White).fontWeight(300).fontSize(8).padding(3).borderRadius(5)
               .backgroundColor('rgba(0, 0, 0, 0.45)').zIndex(1)
           }
-          Image(LocalBookAccessLogic.selectLocalCover(book.coverUrl, $r('app.media.icon_book_default_cover_one')))
-            .draggable(false)
-            .alt($r('app.media.icon_book_default_cover_one'))
-            .width(69)
-            .height(92)
+          BookCover({
+            coverUrl: book.coverUrl ?? '',
+            customCoverUrl: book.customCoverUrl ?? '',
+            bookName: book.bookName ?? '',
+            author: book.author ?? '',
+            coverWidth: 69,
+            coverHeight: 92
+          })
         }.alignContent(Alignment.BottomStart)
 
         Column({

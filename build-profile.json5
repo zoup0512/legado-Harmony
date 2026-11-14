@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001A8859830EFE1520B5700CB1E9CA63664207E39C8B29169222A511D47AE1A444FEE526E64E7910",
+          "keyPassword": "0000001A855D433E34EFE13F24132BF4A832A7AE2D09EB16E706E68C5607A60F2473B350911C60037C04",
           "profile": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\24790\\.ohos\\config\\default_harmony_Legado_B6wlQAisnztSfpZD9Cap-Sjj1GsyXxaRfBKJuxxd1mw=.p12",
-          "storePassword": "0000001A904DC6EE1E575E76823ADBF8838905733C6D6576901AFE5F322E2F9AE09BB0CA031BB60E6AAD"
+          "storePassword": "0000001AC541F2275C1FB443CD403BB204E9478D0F921B9973976834852EE80850994EEBB22A6C69DF8B"
         }
       }
     ],

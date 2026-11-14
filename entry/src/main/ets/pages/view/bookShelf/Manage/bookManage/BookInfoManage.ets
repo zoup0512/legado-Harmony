@@ -2,7 +2,7 @@ import FontConstants from '../../../../../common/constants/FontConstants'
 import { ThemeStorageKey } from '../../../../../common/constants/Theme'
 import { ThemeItem } from '../../../../../common/model/Theme'
 import { Books } from '../../../../../database/entities/Books'
-import { LocalBookAccessLogic } from '../../../../../common/utils/LocalBookAccess'
+import BookCover from '../../../../../componets/common/BookCover'
 
 @Component
 
@@ -25,29 +25,19 @@ export default struct BookInfoManage{
         space:20
       }){
         Stack(){
-          if (this.bookData.isLocalBook){
-            Text('本地')
-              .fontColor('#FFEDD4')
-              .fontWeight(FontConstants.FONT_WEIGHT_400)
-              .fontSize(9)
-              .padding(3)
-              .backgroundColor('#523000')
-              .zIndex(1)
-              .borderRadius({
-                topRight: 6,
-                bottomLeft: 6,
-              })
-          }
           Stack(){
             if (this.bookData.isTop){
               Text('置顶').fontColor(Color.White).fontWeight(FontConstants.FONT_WEIGHT_400).fontSize(9).padding(3).borderRadius(5)
                 .backgroundColor('rgba(0, 0, 0, 0.45)').zIndex(1)
             }
-            Image(LocalBookAccessLogic.selectLocalCover(this.bookData.coverUrl, $r('app.media.icon_book_default_cover_one')))
-              .draggable(false)
-              .alt($r('app.media.icon_book_default_cover_one'))
-              .width(60)
-              .height(80)
+            BookCover({
+              coverUrl: this.bookData.coverUrl ?? '',
+              customCoverUrl: this.bookData.customCoverUrl ?? '',
+              bookName: this.bookData.bookName ?? '',
+              author: this.bookData.author ?? '',
+              coverWidth: 60,
+              coverHeight: 80
+            })
           }
           .alignContent(Alignment.BottomStart)
         }

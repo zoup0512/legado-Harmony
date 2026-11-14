@@ -10,6 +10,12 @@ import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privac
 import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants';
 import { checkPrivateBook, PrivacyBookIdentity, PrivacyOwnershipLookup } from '../../privacy/PrivacyOwnershipLookup';
 
+export interface BookCoverPatch {
+  coverUrl?: string
+  customCoverUrl?: string
+  author?: string
+}
+
 // Leave room for the group predicate below SQLite's bind-parameter limit.
 const PRIVACY_ID_QUERY_CHUNK_SIZE: number = 500;
 
@@ -325,6 +331,29 @@ class BooksDao {
     }
   }
 
+  // 未传的字段保持不变；传空串表示清除
+  async updateBookCover(id: number, patch: BookCoverPatch,
+    generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    try {
+      const column = AppDatabaseUtil.getColumn(this.TABLE_NAME);
+      const predicates = DbUtil.getPredicates(this.TABLE_NAME);
+      predicates.equalTo('id', id);
+      const books = await DbUtil.queryForList<Books>(predicates, column);
+      for (const book of books) {
+        if (!await this.canWriteBook(book, generation)) return false;
+        if (patch.coverUrl !== undefined) book.coverUrl = patch.coverUrl;
+        if (patch.customCoverUrl !== undefined) book.customCoverUrl = patch.customCoverUrl;
+        if (patch.author !== undefined) book.author = patch.author;
+        book.updateTime = Date.now();
+        if (!await this.update(book, generation)) return false;
+      }
+      return books.length > 0;
+    } catch (err) {
+      Logger.error('BooksDao.updateBookCover failed', Logger.errorSummary(err));
+      return false;
+    }
+  }
+
   async batchUpdateBookGroup(ids: number[], groupId: number): Promise<boolean> {
     return await this.updateBookGroup(ids, groupId);
   }
@@ -527,6 +556,26 @@ class BooksDao {
       return names;
     } catch (err) {
       Logger.error('BooksDao.getExistingBookNames failed', Logger.errorSummary(err));
+      return [];
+    }
+  }
+
+  // 删除书籍时用于清理封面文件，包含隐私分组（调用方已校验隐私会话）
+  async getCoverPathsByIds(ids: number[]): Promise<string[]> {
+    try {
+      if (ids.length === 0) return [];
+      const column: ColumnInfo[] = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['coverUrl', 'customCoverUrl']);
+      const predicates = DbUtil.getPredicates(this.TABLE_NAME);
+      predicates.in('id', ids);
+      const books = await DbUtil.queryForList<Books>(predicates, column);
+      const paths: string[] = [];
+      for (const book of books) {
+        if (book.coverUrl) paths.push(book.coverUrl);
+        if (book.customCoverUrl) paths.push(book.customCoverUrl);
+      }
+      return paths;
+    } catch (err) {
+      Logger.error('BooksDao.getCoverPathsByIds failed', Logger.errorSummary(err));
       return [];
     }
   }

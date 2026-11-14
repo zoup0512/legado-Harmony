@@ -6,7 +6,7 @@ import BookGroupsDao from '../../../database/dao/BookGroupsDao'
 import { BookGroups } from '../../../database/entities/BookGroups'
 import BookManageDialog from './components/dialog/BookManageDialog'
 import FolderInfoDialog from './components/dialog/FolderInfoDialog'
-import { LocalBookAccessLogic } from '../../../common/utils/LocalBookAccess'
+import { BookCoverLogic } from '../../../common/utils/BookCoverLogic'
 
 /**
  * 文件夹
@@ -105,7 +105,7 @@ export default struct BookFolder {
                     .backgroundColor('rgba(0, 0, 0, 0.45)')
                     .zIndex(1)
                 }
-                Image(LocalBookAccessLogic.selectLocalCover(item.coverUrl, $r('app.media.icon_book_default_cover_one')))
+                Image(BookCoverLogic.displaySource(item.coverUrl, $r('app.media.icon_book_default_cover_one')))
                   .draggable(false)
                   .alt($r('app.media.icon_book_default_cover_one'))
                   .width(88)

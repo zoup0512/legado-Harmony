@@ -6,6 +6,9 @@ import { showMessage } from '../../../../../componets/common/promptShow'
 import confirmDialogExample from '../../../../../componets/common/confirmDialog'
 import booksUtil, { BOOK_NAME_MAX_LENGTH } from '../../../../../common/utils/booksUtils'
 import commonInputDialog from '../../../../../componets/common/commonInputDialog'
+import { pickerAvatar } from '../../../../../common/utils/photoViewPicker'
+import bookCoverStore from '../../../../../common/utils/BookCoverStore'
+import { TEXT_COVER } from '../../../../../common/utils/BookCoverLogic'
 import BookSelectGroupDialog from './BookSelectGroupDialog'
 import catalogAddShelf from '../../Manage/components/catalogAddShelf'
 import PaddingConstants from '../../../../../common/constants/PaddingConstants'
@@ -19,6 +22,7 @@ import {
 import privacyFolderService, { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyFolderService'
 import privacySessionService from '../../../../../privacy/PrivacySessionService'
 import BooksDao from '../../../../../database/dao/BooksDao'
+import BookCover from '../../../../../componets/common/BookCover'
 
 @CustomDialog
 /**
@@ -34,6 +38,7 @@ export default struct BookInfoDialogs{
     new buttonList(2,'移动至',$r('app.media.folder')),
     new buttonList(3,'加入书单',$r('app.media.shelf')),
     new buttonList(8,'重命名',$r('app.media.edit')),
+    new buttonList(9,'更换封面',$r('app.media.cover_image')),
     new buttonList(4,'删除',$r('app.media.ic_public_delete'))
   ]
   @Consume('booksDataSource')  booksDataSource: BasicDataSource<Books>
@@ -188,9 +193,14 @@ export default struct BookInfoDialogs{
         Row({
           space:CommonConstants.SPACE_12
         }){
-          Image(LocalBookAccessLogic.selectLocalCover(this.bookData.coverUrl, $r('app.media.icon_book_default_cover_one')))
-            .alt($r('app.media.icon_book_default_cover_one'))
-            .width(45).height(65)
+          BookCover({
+            coverUrl: this.bookData.coverUrl ?? '',
+            customCoverUrl: this.bookData.customCoverUrl ?? '',
+            bookName: this.bookData.bookName ?? '',
+            author: this.bookData.author ?? '',
+            coverWidth: 45,
+            coverHeight: 65
+          })
           Column({
             space:PaddingConstants.PADDING_20
           }){
@@ -304,7 +314,50 @@ export default struct BookInfoDialogs{
       case 8 :
         this.renameValue = this.bookData.bookName
         this.renameDialog?.open(); break;
+      case 9 :
+        this.changeCover(); break;
     }
+  }
+
+  // 更换封面：从相册选择（复制进私有目录并裁剪为 3:4）/ 文字封面 / 恢复默认
+  async changeCover(): Promise<void> {
+    let index = -1
+    try {
+      const result = await this.getUIContext().getPromptAction().showActionMenu({
+        title: '更换封面',
+        buttons: [
+          { text: '从相册选择', color: '#000000' },
+          { text: '使用文字封面', color: '#000000' },
+          { text: '恢复默认', color: '#000000' }
+        ]
+      })
+      index = result.index
+    } catch (_) {
+      return
+    }
+    let cover = ''
+    if (index === 0) {
+      const picked = await pickerAvatar()
+      const uri = picked?.photoUris[0] ?? ''
+      if (uri.length === 0) return
+      cover = await bookCoverStore.importImage(uri)
+      if (cover.length === 0) {
+        showMessage('图片读取失败，请换一张试试')
+        return
+      }
+    } else if (index === 1) {
+      cover = TEXT_COVER
+    }
+    const generation = await this.authorizeCurrentBook()
+    if (generation === undefined || !this.isCurrent(generation) ||
+      !await booksUtil.setCustomCover(this.bookData, cover, generation)) {
+      bookCoverStore.deleteCover(cover)
+      showMessage('封面修改失败')
+      return
+    }
+    this.isBookRefreshing++
+    this.controller?.close()
+    showMessage('封面已更新')
   }
 
   //重命名弹窗

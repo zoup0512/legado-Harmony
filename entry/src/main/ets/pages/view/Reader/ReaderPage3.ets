@@ -1,6 +1,7 @@
 import { display, promptAction, router } from '@kit.ArkUI';
 import LayoutMoreDialog from '../../../componets/Reader/LayoutMoreDialog';
 import { bookParser, readerCore, ReadPageComponent } from '@kit.ReaderKit';
+import bookCoverBackfill from '../../../common/utils/BookCoverBackfill';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import Logger from '../../../common/utils/Logger';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -343,6 +344,11 @@ struct ReaderPage3 {
       const catalog = runtime.parser.getCatalogList() || [];
       if (catalog.length === 0) throw new Error('书籍内容为空或格式不受支持');
       this.localizeTxtPreface(localPath, catalog);
+      bookCoverBackfill.fromParser(this.bookData, runtime.parser).then((changed: boolean) => {
+        if (changed) {
+          AppStorage.set<number>('BOOK_IS_BOOK_REFRESHING', (AppStorage.get<number>('BOOK_IS_BOOK_REFRESHING') ?? 0) + 1);
+        }
+      });
       this.CatalogList.clear();
       this.CatalogList.pushAllData(catalog);
       const safeIndex = Math.max(0, Math.min(resourceIndex || 0, catalog.length - 1));

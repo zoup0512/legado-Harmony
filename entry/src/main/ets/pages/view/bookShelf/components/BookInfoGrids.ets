@@ -7,10 +7,10 @@ import FontConstants from '../../../../common/constants/FontConstants'
 import clickUtil from '../../../../common/utils/ClickUtils'
 import {
   isReadableLocalBook,
-  LocalBookAccessLogic,
   LOCAL_BOOK_MISSING_MESSAGE
 } from '../../../../common/utils/LocalBookAccess'
 import { showMessage } from '../../../../componets/common/promptShow'
+import BookCover from '../../../../componets/common/BookCover'
 
 @Component
 /**
@@ -60,19 +60,6 @@ export default struct BookInfoGrids{
       space:8
     }) {
       Stack(){
-        if (this.book.isLocalBook){
-          Text('本地')
-            .fontColor('#FFEDD4')
-            .fontWeight(FontConstants.FONT_WEIGHT_400)
-            .fontSize(9)
-            .padding(3)
-            .backgroundColor('#523000')
-            .zIndex(1)
-            .borderRadius({
-              topRight: 6,
-              bottomLeft: 6,
-            })
-        }
         Stack(){
           if (this.book.isTop){
             Text('置顶')
@@ -84,11 +71,14 @@ export default struct BookInfoGrids{
               .backgroundColor('rgba(0, 0, 0, 0.45)')
               .zIndex(1)
           }
-          Image(LocalBookAccessLogic.selectLocalCover(this.book.coverUrl, $r('app.media.icon_book_default_cover_one')))
-            .draggable(false)
-            .alt($r('app.media.icon_book_default_cover_one'))
-            .width(100)
-            .height(120)
+          BookCover({
+            coverUrl: this.book.coverUrl ?? '',
+            customCoverUrl: this.book.customCoverUrl ?? '',
+            bookName: this.book.bookName ?? '',
+            author: this.book.author ?? '',
+            coverWidth: 100,
+            coverHeight: 120
+          })
         }
         .alignContent(Alignment.BottomStart)
       }

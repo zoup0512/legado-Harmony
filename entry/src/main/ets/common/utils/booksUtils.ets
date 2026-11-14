@@ -1,4 +1,4 @@
-import BooksDao from '../../database/dao/BooksDao'
+import BooksDao, { BookCoverPatch } from '../../database/dao/BooksDao'
 import { Books, BOOK_SEARCH_TYPE } from '../../database/entities/Books'
 import bookGroupUtils from './bookGroupUtils'
 import toolsUtils from './ToolsUtils'
@@ -6,6 +6,7 @@ import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants'
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard'
 import { PreferencesUtil } from '@pura/harmony-utils'
 import Logger from './Logger'
+import bookCoverStore from './BookCoverStore'
 
 export const BOOK_NAME_MAX_LENGTH: number = 50
 
@@ -80,7 +81,9 @@ class booksUtils{
       if (privateOperation && !isPrivacyGenerationValid(generation)) return false
       const oldGroups = await BooksDao.getBookIdsByGroupId(bookIds)
       if (privateOperation && !isPrivacyGenerationValid(generation)) return false
+      const covers = await BooksDao.getCoverPathsByIds(bookIds)
       if (!await BooksDao.deleteBook(bookIds, generation)) return false
+      covers.forEach((path: string) => bookCoverStore.deleteCover(path))
       if (privateOperation && !isPrivacyGenerationValid(generation)) return false
       if (Object.keys(oldGroups).length > 0) bookGroupUtils.updateMoveBookIdsByGroupId(oldGroups)
       return !privateOperation || isPrivacyGenerationValid(generation)
@@ -114,6 +117,27 @@ class booksUtils{
     } catch (_) {
       return '修改失败'
     }
+  }
+
+  /**
+   * 设置用户自定义封面：传图片路径、TEXT_COVER（文字封面）或空串（恢复默认）
+   * 成功后删除旧的自定义封面文件；失败时删除新写入的文件
+   */
+  async setCustomCover(book: Books, customCoverUrl: string,
+    generation: number = capturePrivacyGeneration()): Promise<boolean> {
+    const oldCover = book.customCoverUrl ?? ''
+    if (!book.id) {
+      if (customCoverUrl !== oldCover) bookCoverStore.deleteCover(customCoverUrl)
+      return false
+    }
+    const patch: BookCoverPatch = { customCoverUrl: customCoverUrl }
+    if (!await BooksDao.updateBookCover(book.id, patch, generation)) {
+      if (customCoverUrl !== oldCover) bookCoverStore.deleteCover(customCoverUrl)
+      return false
+    }
+    if (oldCover !== customCoverUrl) bookCoverStore.deleteCover(oldCover)
+    book.customCoverUrl = customCoverUrl
+    return true
   }
 
   private moveBookPreferences(oldName: string, newName: string): void {

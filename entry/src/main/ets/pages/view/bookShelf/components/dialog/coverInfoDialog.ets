@@ -6,6 +6,7 @@ import buttonCommon from '../../../../../componets/common/buttonCommon'
 import bookGroupUtil from '../../../../../common/utils/bookGroupUtils'
 import { ThemeItem } from '../../../../../common/model/Theme'
 import { ThemeStorageKey } from '../../../../../common/constants/Theme'
+import bookCoverStore from '../../../../../common/utils/BookCoverStore'
 
 @CustomDialog
 /**
@@ -20,8 +21,17 @@ export default struct coverInfoDialog{
   @StorageLink('BOOK_IS_BOOK_GROUPS_REFRESHING') BOOK_IS_BOOK_GROUPS_REFRESHING: number = 0
   cancel: () => void = () => {
   }
+  // 打开弹窗时的封面；确认后若已更换则删除旧文件，取消则删除本次新选的文件
+  private originalCover: string = ''
+  private saved: boolean = false
   aboutToAppear(): void {
     this.coverImages = this.itemData.coverUrl??''
+    this.originalCover = this.coverImages
+  }
+  aboutToDisappear(): void {
+    if (!this.saved && this.coverImages !== this.originalCover) {
+      bookCoverStore.deleteCover(this.coverImages)
+    }
   }
   @State coverFolder:boolean = false
   // 主题颜色
@@ -104,6 +114,10 @@ export default struct coverInfoDialog{
               .lineHeight(24)
               .padding({left:32,right:32,bottom:8,top:8})
               .onClick(async ()=>{
+                this.saved = true
+                if (this.coverImages !== this.originalCover) {
+                  bookCoverStore.deleteCover(this.originalCover)
+                }
                 bookGroupUtil.updatePartialGroup(this.itemData)
                 setTimeout(()=>{
                   this.BOOK_IS_BOOK_GROUPS_REFRESHING++
@@ -126,9 +140,20 @@ export default struct coverInfoDialog{
     .width('100%')
   }
 
+  // 相册授权是临时的：复制一份到应用私有目录再保存
   async setCoverImages(){
     let imageUrl = await pickerAvatar();
-    this.coverImages = imageUrl?.photoUris[0] || ''
+    const uri = imageUrl?.photoUris[0] || ''
+    if (uri.length === 0) return
+    const cover = await bookCoverStore.importImage(uri)
+    if (cover.length === 0) {
+      showMessage('图片读取失败，请换一张试试')
+      return
+    }
+    if (this.coverImages !== this.originalCover) {
+      bookCoverStore.deleteCover(this.coverImages)
+    }
+    this.coverImages = cover
     this.itemData.coverUrl = this.coverImages
   }
 }

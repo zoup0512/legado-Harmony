@@ -1,7 +1,7 @@
 import { ThemeStorageKey } from '../../../../common/constants/Theme'
 import { ThemeItem } from '../../../../common/model/Theme'
 import { WorksLists } from '../../../../database/entities/WorksLists'
-import { LocalBookAccessLogic } from '../../../../common/utils/LocalBookAccess'
+import { BookCoverLogic } from '../../../../common/utils/BookCoverLogic'
 
 @Component
 export default struct WorksBookListGrid {
@@ -50,7 +50,7 @@ export default struct WorksBookListGrid {
                 .backgroundColor('rgba(0, 0, 0, 0.45)')
                 .zIndex(1)
             }
-            Image(LocalBookAccessLogic.selectLocalCover(this.work.worksCoverUrl, $r('app.media.icon_book_default_cover_one')))
+            Image(BookCoverLogic.displaySource(this.work.worksCoverUrl, $r('app.media.icon_book_default_cover_one')))
               .draggable(false)
               .alt($r('app.media.icon_book_default_cover_one'))
               .width(88)

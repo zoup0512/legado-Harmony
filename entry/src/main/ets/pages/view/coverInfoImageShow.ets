@@ -7,7 +7,7 @@ import CommonConstants from '../../common/constants/CommonConstants'
 import { ThemeStorageKey } from '../../common/constants/Theme'
 import { ThemeItem } from '../../common/model/Theme'
 import BookOverlay from '../../componets/bookDetail/BookOverlay'
-import { LocalBookAccessLogic } from '../../common/utils/LocalBookAccess'
+import { BookCoverLogic } from '../../common/utils/BookCoverLogic'
 
 @Component
 export default struct coverInfoImageShow {
@@ -68,7 +68,7 @@ export default struct coverInfoImageShow {
           alignItems: ItemAlign.End,
         }){
           if (this.imageString) {
-            Image(LocalBookAccessLogic.selectLocalCover(this.imageString, $r('app.media.icon_book_default_cover_one'))).draggable(false)
+            Image(BookCoverLogic.displaySource(this.imageString, $r('app.media.icon_book_default_cover_one'))).draggable(false)
           } else {
             Column(){
               Image($r('app.media.add_image')).width(24).height(24).draggable(false)
@@ -123,7 +123,7 @@ export default struct coverInfoImageShow {
         alignItems: ItemAlign.End,
       }){
         if (this.imageString) {
-          Image(LocalBookAccessLogic.selectLocalCover(this.imageString, $r('app.media.icon_book_default_cover_one')))
+          Image(BookCoverLogic.displaySource(this.imageString, $r('app.media.icon_book_default_cover_one')))
         } else {
           Column(){
             Image($r('app.media.add_image')).width(24).height(24)

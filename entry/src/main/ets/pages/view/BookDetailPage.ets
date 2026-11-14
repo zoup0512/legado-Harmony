@@ -7,7 +7,6 @@ import { ThemeItem } from '../../common/model/Theme'
 import { bookParser } from '@kit.ReaderKit'
 import { showMessage } from '../../componets/common/promptShow'
 import {
-  LocalBookAccessLogic,
   LOCAL_BOOK_MISSING_MESSAGE,
   requireReadableLocalBookPath
 } from '../../common/utils/LocalBookAccess'
@@ -17,6 +16,7 @@ import { PageAccessRefresh } from '../../privacy/PageAccessRefresh'
 import { BookAccessState, BookOwnership } from '../../privacy/BookAccessState'
 import privacyForeground from '../../privacy/PrivacyForeground'
 import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../privacy/PrivateBookAutoUnlock'
+import BookCover from '../../componets/common/BookCover'
 
 /**
  * 标题图片样式
@@ -519,11 +519,15 @@ struct BookDetailPage {
 
       // 小说标题
       Row({ space: CommonConstants.SPACE_20 }) {
-        Image(LocalBookAccessLogic.selectLocalCover(this.bookData.coverUrl, $r('app.media.icon_book_default_cover_ten')))
-          .alt($r('app.media.icon_book_default_cover_ten'))
-          .width(CommonConstants.NOVEL_IMG_WIDTH)
-          .height(CommonConstants.NOVEL_IMG_HEIGHT)
-          .borderRadius(5)
+        BookCover({
+          coverUrl: this.bookData.coverUrl ?? '',
+          customCoverUrl: this.bookData.customCoverUrl ?? '',
+          bookName: this.bookData.bookName ?? '',
+          author: this.bookData.author ?? '',
+          coverWidth: CommonConstants.NOVEL_IMG_WIDTH,
+          coverHeight: CommonConstants.NOVEL_IMG_HEIGHT,
+          radius: 5
+        })
         Column({ space: 8 }) {
           Text((this.bookData.bookName ?? '').replace(new RegExp('\\..*', 'g'), ''))
             .width('75%')

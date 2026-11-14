@@ -6,6 +6,7 @@ import { Books } from '../../../../database/entities/Books'
 import BookInfoGrids from './BookInfoGrids'
 import BookInfos from './BookInfos'
 import { router } from '@kit.ArkUI'
+import bookCoverBackfill from '../../../../common/utils/BookCoverBackfill'
 
 @Component
 export default struct BookContent {
@@ -43,6 +44,14 @@ export default struct BookContent {
     }
   }
 
+  // 老书导入时未提取封面：后台补齐后刷新列表
+  async backfillCovers(): Promise<void> {
+    const books = this.bookList
+    if (await bookCoverBackfill.run(books) && books === this.bookList) {
+      this.bookList = this.bookList.slice()
+    }
+  }
+
   // 长按书籍进入批量管理，并预先选中该书
   openManage(book: Books) {
     router.pushUrl({
@@ -75,6 +84,7 @@ export default struct BookContent {
       bookGroup:this.bookTypeNumber,
       order:this.searchValue
     }, this.currentPage)
+    this.backfillCovers()
     if (this.booksDataSource.totalCount() < this.bookCount) {
       // this.booksDataSource.pushAllData(this.bookList)
     }
@@ -96,6 +106,7 @@ export default struct BookContent {
       }, this.currentPage);
       if (moreBooks.length > 0) {
         this.bookList.push(...moreBooks);
+        this.backfillCovers();
       }
       this.isLoading = false;
     }
