@@ -470,6 +470,8 @@ struct ReaderPage3 {
     this.autoUnlock = undefined;
     WindowAbility.getInstance().toggleWindowSystemBar(['status', 'navigation'], this.getUIContext().getHostContext());
     PreferencesUtil.putSync(`isScreenState`, this.isScreenState)
+    // 通知书架刷新阅读进度
+    AppStorage.set<number>('BOOK_IS_BOOK_REFRESHING', (AppStorage.get<number>('BOOK_IS_BOOK_REFRESHING') ?? 0) + 1);
     display.off('change', this.screenDensityCallBack);
     this.releaseReader();
   }

@@ -1,6 +1,7 @@
 import BookInfoManage from './BookInfoManage'
 import BookInfoGridManage from './BookInfoGridManage'
 import { Books } from '../../../../../database/entities/Books'
+import ThemedEmptyImage from '../../../../../componets/common/ThemedEmptyImage'
 
 @Component
 export default struct bookListManage{
@@ -13,7 +14,7 @@ export default struct bookListManage{
   build() {
     if (this.bookList === null || this.bookList.length === 0) {
       Column() {
-        Image($r('app.media.no_record')).width(200).height(200)
+        ThemedEmptyImage({ imageSize: 140 }).margin({ bottom: 16 })
         Text('书架暂无书籍').fontSize(12).fontColor('rgba(96, 96, 96, 0.6)').fontWeight(500).padding(5)
       }
       .margin({ top: 120 })

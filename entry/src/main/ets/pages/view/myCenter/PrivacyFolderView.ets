@@ -4,6 +4,7 @@ import privacyFolderService from '../../../privacy/PrivacyFolderService';
 import privacySessionService, { PrivacyBiometricType } from '../../../privacy/PrivacySessionService';
 import privacyCredentialService from '../../../privacy/PrivacyCredentialService';
 import Header from '../../../componets/common/Header';
+import TabPageTitle from '../../../componets/common/TabPageTitle';
 import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
 import { ThemeStorageKey } from '../../../common/constants/Theme';
 import { ThemeItem } from '../../../common/model/Theme';
@@ -218,17 +219,7 @@ export default struct PrivacyFolderView {
     if (this.embedded) {
       // 首页 Tab：与“书架”一致，顶部（含状态栏）为主题色渐变沉浸式背景
       Column() {
-        Row() {
-          Text('隐私文件夹')
-            .fontSize(25)
-            .fontWeight(700)
-            .lineHeight(30)
-            .fontColor(this.theme.mainColor)
-        }
-        .width('100%')
-        .height(40)
-        .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight, bottom: 12 })
-        .padding({ left: 20, right: 20 })
+        TabPageTitle({ title: '隐私文件夹', topInset: this.topRectHeight === 0 ? 30 : this.topRectHeight })
 
         Column({ space: 16 }) {
           this.BodyContent()
@@ -327,7 +318,7 @@ export default struct PrivacyFolderView {
           .layoutWeight(1)
           .lanes(this.EXHIBIT === '宫格' ? 3 : 1)
           .scrollBar(BarState.Off)
-          .margin({ left: -10, right: -10 })
+          .margin(this.EXHIBIT === '宫格' ? { left: -10, right: -10 } : { left: -16, right: -16 })
         }
       }
   }

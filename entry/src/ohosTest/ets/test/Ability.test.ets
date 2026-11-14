@@ -37,6 +37,14 @@ export default function abilityTest() {
         .assertEqual('三体 (3)');
       expect(LocalBookImportLogic.generateDisplayName('新书', ['三体']))
         .assertEqual('新书');
+      expect(LocalBookImportLogic.displayBaseName('《星辰变》.txt')).assertEqual('星辰变');
+      expect(LocalBookImportLogic.displayBaseName('《七界传说》（校订版全本）作者：心梦无痕.txt'))
+        .assertEqual('七界传说');
+      expect(LocalBookImportLogic.displayBaseName('【精校】凡人修仙传(全本) 作者:忘语.txt')).assertEqual('凡人修仙传');
+      expect(LocalBookImportLogic.displayBaseName('作者之死.txt')).assertEqual('作者之死');
+      expect(LocalBookImportLogic.displayBaseName('(1).txt')).assertEqual('(1)');
+      expect(LocalBookImportLogic.extractAuthor('《七界传说》（校订版全本）作者：心梦无痕.txt')).assertEqual('心梦无痕');
+      expect(LocalBookImportLogic.extractAuthor('三体.txt')).assertEqual('');
     });
   });
 }

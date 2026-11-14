@@ -118,12 +118,33 @@ export class LocalBookImportLogic {
     return result;
   }
 
-  static displayBaseName(fileName: string): string {
+  static fileBaseName(fileName: string): string {
     const safeName = LocalBookImportLogic.safeOriginalName(fileName);
     const extension = LocalBookImportLogic.extensionOf(safeName);
-    let baseName = extension.length > 0 ? safeName.substring(0, safeName.length - extension.length) : safeName;
-    baseName = baseName.trim();
+    const baseName = extension.length > 0 ? safeName.substring(0, safeName.length - extension.length) : safeName;
+    return baseName.trim();
+  }
+
+  static displayBaseName(fileName: string): string {
+    const baseName = LocalBookImportLogic.extractBookTitle(LocalBookImportLogic.fileBaseName(fileName));
     return baseName.length > 0 ? baseName : '本地书籍';
+  }
+
+  // 《星辰变》 -> 星辰变；《七界传说》（校订版全本）作者：心梦无痕 -> 七界传说
+  static extractBookTitle(baseName: string): string {
+    const raw = baseName.trim();
+    const quoted = raw.match(/《([^《》]+)》/);
+    if (quoted !== null && quoted[1].trim().length > 0) return quoted[1].trim();
+    const title = raw.replace(/\s*作者\s*[:：].*$/, '')
+      .replace(/[（(【\[［〔][^（(【\[［〔）)】\]］〕]*[）)】\]］〕]/g, ' ')
+      .replace(/^[\s\-_—·.,，、]+|[\s\-_—·.,，、]+$/g, '')
+      .replace(/\s{2,}/g, ' ');
+    return title.length > 0 ? title : raw;
+  }
+
+  static extractAuthor(fileName: string): string {
+    const match = LocalBookImportLogic.fileBaseName(fileName).match(/作者\s*[:：]\s*([^\s（(【\[［〔）)】\]］〕,，、_]+)/);
+    return match !== null ? match[1].trim() : '';
   }
 
   static duplicateKey(originalName: string, size: number, modifiedTime: number): string {
@@ -683,7 +704,8 @@ export class LocalBookImportService {
       book.bookName = candidate.displayName;
       book.bookUrl = finalPath;
       book.originName = candidate.originalName;
-      book.author = '暂无';
+      const fileAuthor = LocalBookImportLogic.extractAuthor(candidate.originalName);
+      book.author = fileAuthor.length > 0 ? fileAuthor : '暂无';
       book.bookGroup = bookGroup;
       book.bookType = bookType;
       book.isJoin = true;

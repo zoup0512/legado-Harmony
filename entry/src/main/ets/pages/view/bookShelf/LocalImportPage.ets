@@ -14,6 +14,7 @@ import localBookImportService, {
 import { showMessage } from '../../../componets/common/promptShow'
 import { PRIVACY_BOOK_GROUP } from '../../../privacy/PrivacyFolderService'
 import privacySessionService from '../../../privacy/PrivacySessionService'
+import ThemedEmptyImage from '../../../componets/common/ThemedEmptyImage'
 
 interface LocalImportRouteParams {
   bookType: number
@@ -524,9 +525,7 @@ struct LocalImportPage {
           .fontSize(15)
           .fontColor('#73000000')
       } else {
-        Image($r('app.media.no_record'))
-          .width(180)
-          .height(180)
+        ThemedEmptyImage({ imageSize: 140 })
         Text('选择本地书籍后，可在导入前检查并勾选')
           .fontSize(14)
           .fontColor('#73000000')
@@ -619,7 +618,7 @@ struct LocalImportPage {
   CandidateList() {
     if (this.getVisibleCandidates().length === 0) {
       Column({ space: 12 }) {
-        Image($r('app.media.no_record')).width(120).height(120)
+        ThemedEmptyImage({ imageSize: 100 })
         Text('没有匹配的书籍').fontSize(14).fontColor('#73000000')
       }
       .layoutWeight(1)

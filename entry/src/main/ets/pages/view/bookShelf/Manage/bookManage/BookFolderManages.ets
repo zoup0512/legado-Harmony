@@ -3,6 +3,7 @@ import { showMessage } from '../../../../../componets/common/promptShow'
 import { BookGroups } from '../../../../../database/entities/BookGroups'
 import BookFolderGridManage from './BookFolderGridManage'
 import BookFolderInfoManage from './BookFolderInfoManage'
+import ThemedEmptyImage from '../../../../../componets/common/ThemedEmptyImage'
 
 @Component
 export default struct BookFolderManages {
@@ -45,7 +46,7 @@ export default struct BookFolderManages {
  build() {
    if (this.bookGroups === null || this.bookGroups.length === 0) {
      Column() {
-       Image($r('app.media.no_record')).width(200).height(200)
+       ThemedEmptyImage({ imageSize: 140 }).margin({ bottom: 16 })
        Text('暂无分组').fontSize(12).fontColor('rgba(96, 96, 96, 0.6)').fontWeight(500).padding(5)
      }
      .margin({ top: 120 })

@@ -7,6 +7,7 @@ import BookInfoGrids from './BookInfoGrids'
 import BookInfos from './BookInfos'
 import { router } from '@kit.ArkUI'
 import bookCoverBackfill from '../../../../common/utils/BookCoverBackfill'
+import ThemedEmptyImage from '../../../../componets/common/ThemedEmptyImage'
 
 @Component
 export default struct BookContent {
@@ -122,7 +123,7 @@ export default struct BookContent {
       }
     } else if (this.bookList.length === 0){
       Column() {
-        Image($r('app.media.no_record')).width(200).height(200)
+        ThemedEmptyImage({ imageSize: 140 }).margin({ bottom: 16 })
         Text('书架暂无书籍')
           .fontSize(12)
           .fontColor('rgba(96, 96, 96, 0.6)')
@@ -132,7 +133,7 @@ export default struct BookContent {
       .margin({ top: 120 })
     } else {
       List({
-        space:10,
+        space:this.EXHIBIT === '宫格' ? 10 : 0,
         scroller:this.scroller
       }){
        ForEach(this.bookList, (item: Books,index:number) => {
@@ -156,6 +157,7 @@ export default struct BookContent {
       .alignListItem(ListItemAlign.Center)
       .layoutWeight(1)
       .lanes(this.EXHIBIT === '宫格' ? 3 : 1)
+      .divider(this.EXHIBIT === '宫格' ? null : { strokeWidth: 0.5, color: '#F0F0F0', startMargin: 90, endMargin: 16 })
       .scrollBar(BarState.Off)
       .onReachEnd(() => {
         if (this.bookList.length < this.bookCount) {

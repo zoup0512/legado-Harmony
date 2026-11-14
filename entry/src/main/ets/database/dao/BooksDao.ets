@@ -7,7 +7,7 @@ import { Books } from '../entities/Books';
 import { BooksTypeSearchParams } from '../types/BooksType';
 import { ColumnInfo } from '../types/ColumnInfo';
 import { capturePrivacyGeneration, isPrivacyGenerationValid } from '../../privacy/PrivacyAccessGuard';
-import { PRIVACY_BOOK_GROUP } from '../../privacy/PrivacyConstants';
+import { PRIVACY_BOOK_GROUP, PRIVACY_GUIDE_ORIGIN } from '../../privacy/PrivacyConstants';
 import { checkPrivateBook, PrivacyBookIdentity, PrivacyOwnershipLookup } from '../../privacy/PrivacyOwnershipLookup';
 
 export interface BookCoverPatch {
@@ -26,7 +26,9 @@ class BooksDao {
   async hasPrivacyBooks(): Promise<boolean> {
     if (!DbUtil.rdbStore) throw new Error('Privacy ownership database unavailable');
     const predicates = DbUtil.getPredicates(this.TABLE_NAME);
-    predicates.equalTo('bookGroup', PRIVACY_BOOK_GROUP).limitAs(1);
+    predicates.equalTo('bookGroup', PRIVACY_BOOK_GROUP)
+      .beginWrap().notEqualTo('origin', PRIVACY_GUIDE_ORIGIN).or().isNull('origin').endWrap()
+      .limitAs(1);
     const column = AppDatabaseUtil.getAssignColumn(this.TABLE_NAME, ['id']);
     return (await DbUtil.queryForList<Books>(predicates, column)).length > 0;
   }

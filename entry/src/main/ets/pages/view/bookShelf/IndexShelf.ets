@@ -1,5 +1,7 @@
 import { router } from '@kit.ArkUI'
 import BookBodyContent from './components/BookBodyContent'
+import TabPageTitle from '../../../componets/common/TabPageTitle'
+import { statusBarContentColorFor } from '../../../common/utils/ThemeManager'
 import { IconTitleVo } from '../../../componetsmodel/IconTitleVo'
 import dialogTitleFuction from '../../../componets/common/dialogTitleFuction'
 import { ThemeItem } from '../../../common/model/Theme'
@@ -30,21 +32,11 @@ export default struct IndexShelf {
 
   build() {
     Column() {
-      Row() {
-        Text('书架')
-          .fontSize(25)
-          .fontWeight(700)
-          .lineHeight(30)
-          .fontColor(this.theme.mainColor)
-        Blank()
+      TabPageTitle({ title: '书架', topInset: this.topRectHeight === 0 ? 30 : this.topRectHeight }) {
         Image($r('app.media.more')).width(24)
+          .fillColor(statusBarContentColorFor(this.theme.mainColor))
           .bindMenu(this.MenuBuilder())
       }
-      .width('100%')
-      .height(40)
-      .alignItems(VerticalAlign.Center)
-      .margin({ top: this.topRectHeight === 0 ? 30 : this.topRectHeight, bottom: 12 })
-      .padding({ left: 20, right: 20 })
 
       Column() {
         BookBodyContent({

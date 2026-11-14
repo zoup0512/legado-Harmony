@@ -62,5 +62,24 @@ export default function readerProgressTest() {
       expect(book.durChapterIndex).assertEqual(0);
       expect(book.localBookDurChapterPos === null).assertTrue();
     });
+
+    it('summaryUsesMatchingCacheProgress', 0, () => {
+      const book = new Books();
+      book.bookUrl = '/books/current.epub';
+      const saved = savedProgress(book.bookUrl);
+      saved.totalChapterNum = 10;
+      const summary = ReaderProgress.summarize(book, (): Books => saved);
+      expect(summary.started).assertTrue();
+      expect(summary.chapterTitle).assertEqual('Chapter five');
+      expect(summary.percent).assertEqual(50);
+    });
+
+    it('summaryIgnoresOtherBookAndUnreadBook', 0, () => {
+      const book = new Books();
+      book.bookUrl = '/books/current.epub';
+      const summary = ReaderProgress.summarize(book, (): Books => savedProgress('/books/other.epub'));
+      expect(summary.started).assertFalse();
+      expect(summary.percent).assertEqual(0);
+    });
   });
 }

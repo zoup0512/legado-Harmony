@@ -9,6 +9,7 @@ import { productViewManager } from '@kit.StoreKit'
 import Logger from '../../../common/utils/Logger'
 import { MarketUpdateCallbacks, MarketUpdateController, MarketUpdateFailure } from '../../../common/utils/MarketUpdateController'
 import { showMessage } from '../../../componets/common/promptShow'
+import TabPageTitle from '../../../componets/common/TabPageTitle'
 
 @Entry
 @Component
@@ -24,6 +25,7 @@ export default struct MyCenter {
   Column = new ColumnModifier()
   // 主题颜色：顶部（含状态栏）为主题色渐变沉浸式背景，与书架一致
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
+  @StorageLink('topRectHeight') topRectHeight: number = 0
   private marketUpdate: MarketUpdateController = new MarketUpdateController()
 
   aboutToAppear(): void {
@@ -82,11 +84,8 @@ export default struct MyCenter {
 
   build() {
     Column() {
-      Text("我的")
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .width("100%")
-        .height(48)
+      // 外层 ColumnModifier 已处理左右内边距和顶部安全区
+      TabPageTitle({ title: '我的', horizontalPadding: 0, topInset: this.topRectHeight === 0 ? 30 : 0 })
 
       Scroll() {
         Column() {

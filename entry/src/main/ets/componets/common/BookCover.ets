@@ -60,14 +60,15 @@ export default struct BookCover {
           .fontColor('#FFFFFF')
           .maxLines(4)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Blank()
-        if (this.author.trim().length > 0 && this.coverWidth >= 50) {
-          Text(this.author.trim())
-            .fontSize(Math.max(7, this.coverWidth * 0.1))
-            .fontColor('rgba(255,255,255,0.75)')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
+        // 暂时隐藏封面作者显示，需要时恢复下方注释代码
+        // Blank()
+        // if (this.author.trim().length > 0 && this.coverWidth >= 50) {
+        //   Text(this.author.trim())
+        //     .fontSize(Math.max(7, this.coverWidth * 0.1))
+        //     .fontColor('rgba(255,255,255,0.75)')
+        //     .maxLines(1)
+        //     .textOverflow({ overflow: TextOverflow.Ellipsis })
+        // }
       }
       .alignItems(HorizontalAlign.Start)
       .width('100%')
