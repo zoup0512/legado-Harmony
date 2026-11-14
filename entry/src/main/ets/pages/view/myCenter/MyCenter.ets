@@ -6,6 +6,7 @@ import { ThemeItem } from '../../../common/model/Theme'
 import { ColumnModifier } from '../../../common/utils/ComponetModifier'
 import { bundleManager, common, Want } from '@kit.AbilityKit'
 import { productViewManager } from '@kit.StoreKit'
+import { BusinessError } from '@kit.BasicServicesKit'
 import Logger from '../../../common/utils/Logger'
 import { MarketUpdateCallbacks, MarketUpdateController, MarketUpdateFailure } from '../../../common/utils/MarketUpdateController'
 import { showMessage } from '../../../componets/common/promptShow'
@@ -19,6 +20,7 @@ export default struct MyCenter {
   @State end_list: dataItem[] = [
     new dataItem("主题", 6, $r("app.media.my_center_book_icon")),
     new dataItem("检查更新", 2, $r("app.media.my_center_cloud_icon")),
+    new dataItem("用户评价", 5, $r("app.media.my_center_review_icon")),
     new dataItem("用户隐私与协议", 3, $r("app.media.my_center_file_icon")),
     new dataItem("免责声明", 4, $r("app.media.my_center_about_icon")),
   ]
@@ -74,6 +76,29 @@ export default struct MyCenter {
     })
   }
 
+  private openReview(): void {
+    const failureMessage = '无法打开应用市场，请稍后重试或前往应用市场搜索“隐私阅读器”进行评价'
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext | undefined
+      if (!context) {
+        Logger.warn('MyCenter: review context is unavailable')
+        this.showMarketMessage(failureMessage)
+        return
+      }
+      const request: Want = {
+        action: 'ohos.want.action.appdetail',
+        uri: 'market://details?id=com.razor.h.reader'
+      }
+      context.startAbility(request).catch((error: BusinessError): void => {
+        Logger.error('MyCenter: failed to open app market for review', Logger.errorSummary(error))
+        this.showMarketMessage(failureMessage)
+      })
+    } catch (_) {
+      Logger.warn('MyCenter: failed to open app market for review')
+      this.showMarketMessage(failureMessage)
+    }
+  }
+
   private showMarketMessage(message: string): void {
     try {
       showMessage(message, 3000)
@@ -118,7 +143,8 @@ export default struct MyCenter {
         .width("100%")
       }
       .layoutWeight(1)
-      .align(Alignment.Top)
+      // 内容较少时在剩余空间内居中显示；超出时可正常滚动
+      .align(Alignment.Center)
       .scrollBar(BarState.Off)
       .padding({ bottom: 10 })
     }
@@ -146,6 +172,9 @@ export default struct MyCenter {
         router.pushUrl({
           url: 'pages/view/myCenter/aboutUs/DisclaimerPage'
         })
+        break;
+      case 5:
+        this.openReview()
         break;
       case 6:
         router.pushUrl({
