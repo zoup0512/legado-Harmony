@@ -33,22 +33,10 @@ export default struct BookInfoDialogs{
   //推送提醒
   @Prop bookData:Books
   @State pushReminder:boolean = false
-  @State buttonListInfo:buttonList[] = [
-    new buttonList(1,this.bookData.isTop?'取消置顶':'置顶',$r('app.media.top')),
-    new buttonList(2,'移动至',$r('app.media.folder')),
-    new buttonList(3,'加入书单',$r('app.media.shelf')),
-    new buttonList(8,'重命名',$r('app.media.edit')),
-    new buttonList(9,'更换封面',$r('app.media.cover_image')),
-    new buttonList(4,'删除',$r('app.media.ic_public_delete'))
-  ]
+  @State buttonListInfo:buttonList[] = []
   @Consume('booksDataSource')  booksDataSource: BasicDataSource<Books>
   cancel: () => void = () => {
   }
-  // 书架长按时提供“批量管理”入口；其他场景（如隐私文件夹）不传则不显示
-  batchManage: boolean = false
-  onBatchManage: () => void = () => {
-  }
-
   private unsubscribePrivacy: (() => void) | undefined
   private active: boolean = false
   @State contentVisible: boolean = false
@@ -62,6 +50,7 @@ export default struct BookInfoDialogs{
       this.bookMoveGroup?.close()
       this.bookDelDialog?.close()
       this.renameDialog?.close()
+      this.authorDialog?.close()
       this.isCatalogAddShelf = false
       this.controller?.close()
     })
@@ -83,12 +72,17 @@ export default struct BookInfoDialogs{
         this.controller?.close()
         return
       }
-      this.buttonListInfo = this.buttonListInfo.filter(item => item.id !== 5 && item.id !== 6)
-      this.buttonListInfo.push(new buttonList(privateBook ? 5 : 6,
-        privateBook ? '移出隐私' : '移入隐私', privateBook ? $r('app.media.folder') : $r('app.media.hide')))
-      if (this.batchManage) {
-        this.buttonListInfo.push(new buttonList(7, '批量管理', $r('app.media.shelf_manage')))
-      }
+      this.buttonListInfo = [
+        new buttonList(1,this.bookData.isTop?'取消置顶':'置顶',$r('app.media.top')),
+        new buttonList(2,'移动至',$r('app.media.folder')),
+        new buttonList(3,'加入书单',$r('app.media.shelf')),
+        new buttonList(privateBook ? 5 : 6, privateBook ? '移出隐私' : '移入隐私',
+          privateBook ? $r('app.media.folder') : $r('app.media.hide')),
+        new buttonList(8,'重命名',$r('app.media.edit')),
+        new buttonList(9,'更换封面',$r('app.media.cover_image')),
+        new buttonList(10,'编辑作者',$r('app.media.edit')),
+        new buttonList(4,'删除',$r('app.media.ic_public_delete'))
+      ]
       this.contentVisible = true
     } catch (_) {
       this.controller?.close()
@@ -294,11 +288,6 @@ export default struct BookInfoDialogs{
 
   async bookInfoButton(id: number): Promise<void> {
     if (this.privacyBusy) return
-    if (id === 7) {
-      this.controller?.close()
-      this.onBatchManage()
-      return
-    }
     if (id !== 5 && id !== 6 && await this.authorizeCurrentBook() === undefined) return
     switch (id){
       case 1 :
@@ -318,6 +307,9 @@ export default struct BookInfoDialogs{
         this.renameDialog?.open(); break;
       case 9 :
         this.changeCover(); break;
+      case 10 :
+        this.authorValue = this.bookData.author ?? ''
+        this.authorDialog?.open(); break;
     }
   }
 
@@ -395,6 +387,50 @@ export default struct BookInfoDialogs{
     this.isBookRefreshing++
     this.controller?.close()
     showMessage('书名已修改')
+  }
+
+  //编辑作者弹窗
+  @State authorValue: string = ''
+  authorDialog: CustomDialogController | null = new CustomDialogController({
+    builder: commonInputDialog({
+      textValue: this.authorValue,
+      confirm: () => {
+        this.editAuthor()
+      },
+      title: '编辑作者',
+      placeholder: '请输入作者',
+      maxLength: BOOK_NAME_MAX_LENGTH
+    }),
+    gridCount: 4,
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: false,
+    cornerRadius: 25
+  })
+
+  async editAuthor(): Promise<void> {
+    const generation = await this.authorizeCurrentBook()
+    if (generation === undefined || !this.bookData.id) return
+    const newAuthor = this.authorValue.trim()
+    if (newAuthor.length === 0) {
+      showMessage('请输入作者')
+      return
+    }
+    if (newAuthor.length > BOOK_NAME_MAX_LENGTH) {
+      showMessage(`作者最多${BOOK_NAME_MAX_LENGTH}个字符`)
+      return
+    }
+    if (newAuthor === this.bookData.author) return
+    const success = await BooksDao.updateBookCover(this.bookData.id, { author: newAuthor }, generation)
+    if (!this.isCurrent(generation)) return
+    if (!success) {
+      showMessage('作者修改失败')
+      return
+    }
+    this.bookData.author = newAuthor
+    this.isBookRefreshing++
+    this.controller?.close()
+    showMessage('作者已修改')
   }
 
   @State delCache:boolean = false

@@ -5,7 +5,6 @@ import booksDao from '../../../../database/dao/BooksDao'
 import { Books } from '../../../../database/entities/Books'
 import BookInfoGrids from './BookInfoGrids'
 import BookInfos from './BookInfos'
-import { router } from '@kit.ArkUI'
 import bookCoverBackfill from '../../../../common/utils/BookCoverBackfill'
 import ThemedEmptyImage from '../../../../componets/common/ThemedEmptyImage'
 import { AdaptiveLayout } from '../../../../common/utils/AdaptiveLayout'
@@ -58,19 +57,6 @@ export default struct BookContent {
     if (await bookCoverBackfill.run(books) && books === this.bookList) {
       this.bookList = this.bookList.slice()
     }
-  }
-
-  // 长按书籍进入批量管理，并预先选中该书
-  openManage(book: Books) {
-    router.pushUrl({
-      url: 'pages/view/bookShelf/Manage/BookManagePage',
-      params: {
-        currentIndex: this.currentIndex,
-        EXHIBIT: this.EXHIBIT,
-        bookTypeNumber: this.bookTypeNumber,
-        selectedId: book.id
-      }
-    })
   }
 
   changeBookType(){
@@ -149,15 +135,11 @@ export default struct BookContent {
               if (this.EXHIBIT === '宫格') {
                 BookInfoGrids({
                   book:item,
-                  coverWidth: this.gridCoverWidth(),
-                  batchManage: true,
-                  onBatchManage: (book: Books) => { this.openManage(book) }
+                  coverWidth: this.gridCoverWidth()
                 })
               } else {
                 BookInfos({
-                  book:item,
-                  batchManage: true,
-                  onBatchManage: (book: Books) => { this.openManage(book) }
+                  book:item
                 })
               }
             }

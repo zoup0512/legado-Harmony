@@ -20,9 +20,6 @@ export default struct BookInfoGrids{
 
   @Prop book:Books
   @Prop coverWidth: number = 100
-  batchManage: boolean = false
-  onBatchManage: (book: Books) => void = () => {
-  }
 
   onDelete: () => void = () => {
 
@@ -141,10 +138,6 @@ export default struct BookInfoGrids{
     // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
     this.bookInfoDialog = new CustomDialogController({
       builder: BookInfoDialogs({
-        batchManage: this.batchManage,
-        onBatchManage: () => {
-          this.onBatchManage(this.book)
-        },
         bookData:this.book,
         cancel: () => {
           this.exitDialog()

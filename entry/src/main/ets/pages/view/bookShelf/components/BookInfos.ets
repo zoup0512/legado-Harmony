@@ -25,9 +25,6 @@ export default struct BookInfos {
     mainColor: '#24b277', secondColor: '#e4f5ee', text: '主题3'
   }
   @State progress: ReaderProgressSummary = new ReaderProgressSummary()
-  batchManage: boolean = false
-  onBatchManage: (book: Books) => void = () => {
-  }
   @State delCache: boolean = false
   bookInfoDialog: CustomDialogController | null = null
 
@@ -35,10 +32,6 @@ export default struct BookInfos {
     // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
     this.bookInfoDialog = new CustomDialogController({
       builder: BookInfoDialogs({
-        batchManage: this.batchManage,
-        onBatchManage: () => {
-          this.onBatchManage(this.book)
-        },
         bookData: this.book, cancel: () => {
           this.exitDialog()
         }
