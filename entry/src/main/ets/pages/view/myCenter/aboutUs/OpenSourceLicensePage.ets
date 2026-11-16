@@ -5,6 +5,8 @@ import { router } from '@kit.ArkUI';
 struct OpenSourceLicensePage {
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
   @State rowsData: Array<string> = [
     'GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007',
     'Copyright (C) 2007 Free Software Foundation, Inc. https://fsf.org/ Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed.',
@@ -51,6 +53,7 @@ struct OpenSourceLicensePage {
       })
       .height(48)
       .width("100%")
+      .constraintSize({ maxWidth: 840 })
 
       // 可滚动的内容区域
       Scroll() {
@@ -74,14 +77,17 @@ struct OpenSourceLicensePage {
       .scrollable(ScrollDirection.Vertical) // 设置为垂直滚动
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.None)
-      .height("100%")
-      .margin({ bottom: 60 })
+      .width("100%")
+      .constraintSize({ maxWidth: 840 })
+      .layoutWeight(1)
+      .padding({ bottom: this.bottomRectHeight + 20 })
     }
-    .height("100%") // 设置外部 Column 高度为 100%
+    .width("100%")
+    .height("100%")
     .padding({
       top: this.topRectHeight,
-      left: 20,
-      right: 20
+      left: 20 + this.leftRectWidth,
+      right: 20 + this.rightRectWidth
     })
     .backgroundColor("rgb(245, 245, 245)")
   }

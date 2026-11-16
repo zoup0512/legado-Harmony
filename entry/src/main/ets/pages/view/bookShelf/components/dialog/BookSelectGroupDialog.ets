@@ -16,11 +16,13 @@ import BooksDao from '../../../../../database/dao/BooksDao'
 import toolsUtils from '../../../../../common/utils/ToolsUtils'
 import privacySessionService from '../../../../../privacy/PrivacySessionService'
 import { PRIVACY_BOOK_GROUP } from '../../../../../privacy/PrivacyConstants'
+import { AdaptiveLayout } from '../../../../../common/utils/AdaptiveLayout'
 
 @Component
 @CustomDialog
 export default struct BookSelectGroupDialog{
   oldGroupId?:number
+  @State contentWidth: number = 0
   controller?: CustomDialogController
   currentIndex:number = 0
   Ids:number|number[] = 0
@@ -55,7 +57,7 @@ export default struct BookSelectGroupDialog{
       Divider().strokeWidth(0.5)
       Scroll(){
         GridRow({
-          columns:3
+          columns: Math.min(3, AdaptiveLayout.shelfColumns(this.contentWidth))
         }){
           GridCol(){
             this.title()
@@ -67,7 +69,12 @@ export default struct BookSelectGroupDialog{
               }
             }
           })
-        }.padding(PaddingConstants.PADDING_20)
+        }
+        .width('100%')
+        .padding(PaddingConstants.PADDING_20)
+        .onAreaChange((_oldArea: Area, area: Area) => {
+          this.contentWidth = Math.max(0, Number(area.width) - 40)
+        })
       }
       .align(Alignment.Top)
       .height('65%')
@@ -116,7 +123,9 @@ export default struct BookSelectGroupDialog{
     .margin({
       bottom:PaddingConstants.PADDING_16
     })
-    .width(85).height(36)
+    .width(this.contentWidth > 0 ? Math.min(85,
+      this.contentWidth / Math.min(3, AdaptiveLayout.shelfColumns(this.contentWidth))) : 85)
+    .height(36)
     .backgroundColor('rgba(0, 0, 0,0.06)')
     .padding({
       left:16,

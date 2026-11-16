@@ -138,6 +138,8 @@ export default struct coverInfoDialog{
     .borderRadius({topLeft:20,topRight:20})
     .backgroundColor(Color.White)
     .width('100%')
+    .constraintSize({ maxWidth: 560 })
+    .align(Alignment.Bottom)
   }
 
   // 相册授权是临时的：复制一份到应用私有目录再保存

@@ -96,5 +96,6 @@ export default struct Dialog {
       left: 24,
       right: 24
     })
+    .constraintSize({ maxWidth: 560 })
   }
 }

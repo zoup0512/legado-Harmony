@@ -9,6 +9,7 @@ import { BookCoverLogic } from '../../../../../common/utils/BookCoverLogic'
 @Component
 export default struct BookFolderGridManage {
   @Prop group:BookGroups
+  @Prop coverWidth: number = 100
   @Link checkGroup:Record<number, boolean>
   @Prop isManage:boolean
   onSelect:Function = () => {}
@@ -40,8 +41,8 @@ export default struct BookFolderGridManage {
             Image(BookCoverLogic.displaySource(this.group.coverUrl, $r('app.media.icon_book_default_cover_one')))
               .draggable(false)
               .alt($r('app.media.icon_book_default_cover_one'))
-              .width(88)
-              .height(120)
+              .width(this.coverWidth * 0.88)
+              .height(this.coverWidth * 1.2)
           }.alignContent(Alignment.BottomStart)
         }
         .alignContent(Alignment.BottomEnd)
@@ -51,14 +52,14 @@ export default struct BookFolderGridManage {
         Row() {
           Image($r('app.media.occlusion1')).draggable(false)
         }
-        .zIndex(1).width(95).height(110)
+        .zIndex(1).width(this.coverWidth * 0.95).height(this.coverWidth * 1.1)
         Row() {
           Image($r('app.media.occlusion2')).draggable(false)
         }
-        .zIndex(0).width(100).height(100)
+        .zIndex(0).width(this.coverWidth).height(this.coverWidth)
       }
       .alignContent(Alignment.BottomStart)
-      Row().width(100).height(20).backgroundColor('rgba(255, 255, 255, 0.6)').borderRadius(10)
+      Row().width(this.coverWidth).height(20).backgroundColor('rgba(255, 255, 255, 0.6)').borderRadius(10)
       Text(this.group.groupName)
           .fontSize(15)
           .fontWeight(700)
@@ -75,6 +76,7 @@ export default struct BookFolderGridManage {
           .fontWeight(500)
           .maxLines(1)
     }
+    .width(this.coverWidth + 16)
     .padding({ left:8,right:8,bottom:5,top:5 })
   }
 }

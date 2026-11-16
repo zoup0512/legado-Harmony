@@ -53,5 +53,6 @@ export default struct confirmDialogExample {
           .backgroundColor(this.theme.mainColor)
       }.padding({top:20,bottom:20})
     }
+    .constraintSize({ maxWidth: 560 })
   }
 }

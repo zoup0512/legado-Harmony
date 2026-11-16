@@ -13,6 +13,7 @@ export default struct BookInfoGridManage{
   @Prop isManage:boolean
 
   @Prop bookData:Books
+  @Prop coverWidth: number = 100
 
   @Link checkGroup:Record<number, boolean>
   onSelect:Function = () => {}
@@ -52,8 +53,8 @@ export default struct BookInfoGridManage{
               customCoverUrl: this.bookData.customCoverUrl ?? '',
               bookName: this.bookData.bookName ?? '',
               author: this.bookData.author ?? '',
-              coverWidth: 100,
-              coverHeight: 120
+              coverWidth: this.coverWidth,
+              coverHeight: this.coverWidth * 1.2
             })
           }.alignContent(Alignment.BottomStart)
         }
@@ -81,6 +82,8 @@ export default struct BookInfoGridManage{
         .fontWeight(500)
         .maxLines(1)
     }
+    .width(this.coverWidth + 16)
+    .alignItems(HorizontalAlign.Start)
     .padding({ left:8,right:8,bottom:5,top:5 })
   }
 }

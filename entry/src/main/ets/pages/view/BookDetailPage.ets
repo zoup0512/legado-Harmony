@@ -17,6 +17,7 @@ import { BookAccessState, BookOwnership } from '../../privacy/BookAccessState'
 import privacyForeground from '../../privacy/PrivacyForeground'
 import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../privacy/PrivateBookAutoUnlock'
 import BookCover from '../../componets/common/BookCover'
+import { AdaptiveLayout } from '../../common/utils/AdaptiveLayout'
 
 /**
  * 标题图片样式
@@ -43,13 +44,18 @@ struct AddBookShelfDialog {
       right: 20,
       top: 16,
       bottom: 16
-    }).backgroundColor('#333333')
+    }).constraintSize({ maxWidth: 560 }).backgroundColor('#333333')
   }
 }
 
 @Entry
 @Component
 struct BookDetailPage {
+  @State pageWidth: number = 0
+  @StorageProp('topRectHeight') topRectHeight: number = 0
+  @StorageProp('bottomRectHeight') bottomRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
   @State isShow: boolean = true;
   @State currentIndex: number = 0;
   // 是否加入书架
@@ -411,12 +417,13 @@ struct BookDetailPage {
       Row({ space: 20 }) {
         Button(this.bookData.isJoin ? '已加书架' : '加入书架')
           .padding({
-            left: 32,
-            right: 32,
+            left: 8,
+            right: 8,
             top: 8,
             bottom: 8
           })
-          .width(150)
+          .layoutWeight(1)
+          .constraintSize({ maxWidth: 240 })
           .height(40)
           .borderRadius(200)
           .backgroundColor(this.theme.secondColor)
@@ -426,12 +433,13 @@ struct BookDetailPage {
           })
         Button('立即阅读')
           .padding({
-            left: 32,
-            right: 32,
+            left: 8,
+            right: 8,
             top: 8,
             bottom: 8
           })
-          .width(150)
+          .layoutWeight(1)
+          .constraintSize({ maxWidth: 240 })
           .height(40)
           .borderRadius(200)
           .backgroundColor(this.theme.mainColor)
@@ -476,114 +484,169 @@ struct BookDetailPage {
     }.padding({ top: 8, bottom: 8 }).width(59).height(40)
   }
 
-  build() {
-    if (this.privacyCovered) {
-      Column({ space: 18 }) {
-        if (this.resumeAuthPending || (this.ownership === BookOwnership.PRIVATE && !this.accessFailed) ||
-          (this.privacyChecking && !this.accessFailed)) {
-          Text('正在验证访问权限…').fontSize(20).fontWeight(FontWeight.Medium)
-          LoadingProgress().width(36).height(36)
-        } else {
-          Text(BookAccessState.coverTitle(this.ownership, this.privacyChecking, this.accessFailed))
-            .fontSize(20).fontWeight(FontWeight.Medium)
-          Text(this.privacyError || '请重新检查书籍访问权限')
-            .fontSize(14).fontColor('#666666').textAlign(TextAlign.Center)
-          if (this.pageReady) {
-            Button('重新检查').onClick(() => this.refreshDetailAccess())
-          }
-          Button('返回书架').onClick(() => router.back())
-        }
-      }.width('100%').height('100%').padding(32)
-      .justifyContent(FlexAlign.Center)
-      .backgroundColor('#F6F7F9')
-    } else {
-    Column() { // todo 状态栏
-      Row() {
-
-      }.width(CommonConstants.FULL_WIDTH).height(40)
-
-      // 标题栏
-      Row() { // 返回与标题
-        Row({ space: 12 }) {
-          Image($r("app.media.ic_public_return_left")).titleImageStyle().onClick(() => {
-            router.back()
-          })
-          Text('书籍详情').fontColor(Color.White).fontSize(16)
-        }.height(24)
-      }.padding({
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: 12
-      }).height(36).width(CommonConstants.FULL_WIDTH)
-
-      // 小说标题
-      Row({ space: CommonConstants.SPACE_20 }) {
-        BookCover({
-          coverUrl: this.bookData.coverUrl ?? '',
-          customCoverUrl: this.bookData.customCoverUrl ?? '',
-          bookName: this.bookData.bookName ?? '',
-          author: this.bookData.author ?? '',
-          coverWidth: CommonConstants.NOVEL_IMG_WIDTH,
-          coverHeight: CommonConstants.NOVEL_IMG_HEIGHT,
-          radius: 5
-        })
-        Column({ space: 8 }) {
-          Text((this.bookData.bookName ?? '').replace(new RegExp('\\..*', 'g'), ''))
-            .width('75%')
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .fontColor(Color.White)
-            .fontSize(20)
-          Blank()
-          if (this.bookData.author?.trim()) {
-            Text(this.bookData.author)
-              .fontSize(CommonConstants.FONT_NOVEL_DETAIL_AUTHOR_SIZE)
-              .fontColor('#FFF')
-              .opacity(0.45)
-          }
-        }.height(CommonConstants.NOVEL_IMG_HEIGHT).alignItems(HorizontalAlign.Start)
-      }.padding({
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: 12
-      }).width(CommonConstants.FULL_WIDTH).height(116)
-
-      // 书籍简介
-      Flex() {
-        Text(this.bookData.intro?.trim() ? this.bookData.intro : '未提供简介')
-          .fontColor('#FFFFFF')
-          .fontSize(14)
-          .fontWeight(400)
-          .lineHeight(22)
-      }.padding({
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: 12
-      }).width(CommonConstants.FULL_WIDTH).bindSheet($$this.isShow, this.catalogPanel(), {
-        detents: [SheetSize.MEDIUM, SheetSize.LARGE, 200],
-        backgroundColor: '#FFFFFF',
-        showClose: false,
-        dragBar: true,
-        enableOutsideInteractive: true,
+  @Builder
+  bookMetadata() {
+    // 小说标题
+    Row({ space: CommonConstants.SPACE_20 }) {
+      BookCover({
+        coverUrl: this.bookData.coverUrl ?? '',
+        customCoverUrl: this.bookData.customCoverUrl ?? '',
+        bookName: this.bookData.bookName ?? '',
+        author: this.bookData.author ?? '',
+        coverWidth: CommonConstants.NOVEL_IMG_WIDTH,
+        coverHeight: CommonConstants.NOVEL_IMG_HEIGHT,
+        radius: 5
       })
-
-      // 章节目录Panel
-      /*Panel(this.isValue) {
-        Column() {
-
+      Column({ space: 8 }) {
+        Text((this.bookData.bookName ?? '').replace(new RegExp('\\..*', 'g'), ''))
+          .width('100%')
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .fontColor(Color.White)
+          .fontSize(20)
+        Blank()
+        if (this.bookData.author?.trim()) {
+          Text(this.bookData.author)
+            .fontSize(CommonConstants.FONT_NOVEL_DETAIL_AUTHOR_SIZE)
+            .fontColor('#FFF')
+            .opacity(0.45)
         }
+      }.height(CommonConstants.NOVEL_IMG_HEIGHT).layoutWeight(1).alignItems(HorizontalAlign.Start)
+    }.padding({
+      left: 20,
+      right: 20,
+      top: 12,
+      bottom: 12
+    }).width(CommonConstants.FULL_WIDTH).height(116)
+  }
+
+  @Builder
+  compactIntroduction() {
+    // 书籍简介
+    Flex() {
+      Text(this.bookData.intro?.trim() ? this.bookData.intro : '未提供简介')
+        .fontColor('#FFFFFF')
+        .fontSize(14)
+        .fontWeight(400)
+        .lineHeight(22)
+    }.padding({
+      left: 20,
+      right: 20,
+      top: 12,
+      bottom: 12
+    }).width(CommonConstants.FULL_WIDTH).bindSheet($$this.isShow, this.catalogPanel(), {
+      width: this.pageWidth > 0 ? AdaptiveLayout.panelWidth(Math.max(0, this.pageWidth - this.leftRectWidth - this.rightRectWidth)) : '100%',
+      preferType: SheetType.BOTTOM,
+      detents: [SheetSize.MEDIUM, SheetSize.LARGE, 200],
+      backgroundColor: '#FFFFFF',
+      showClose: false,
+      dragBar: true,
+      enableOutsideInteractive: true,
+    })
+  }
+
+  @Builder
+  wideDetails() {
+    Row({ space: 24 }) {
+      Scroll() {
+        Column() {
+          this.bookMetadata()
+        }.width('100%')
       }
-      .width(CommonConstants.FULL_WIDTH)
-      .type(PanelType.Foldable)
-      .halfHeight('50%')
-      .backgroundColor('#FFFFFF')*/
+      .width(300)
+      .height('100%')
+      .align(Alignment.Top)
+      .scrollBar(BarState.Off)
+
+      Column({ space: 12 }) {
+        Scroll() {
+          Text(this.bookData.intro?.trim() ? this.bookData.intro : '未提供简介')
+            .fontColor(Color.White)
+            .fontSize(14)
+            .lineHeight(22)
+            .width('100%')
+            .padding(16)
+        }
+        .width('100%')
+        .constraintSize({ maxHeight: 160 })
+        .align(Alignment.Top)
+        .scrollBar(BarState.Auto)
+        Column() {
+          this.catalogPanel()
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .borderRadius(16)
+        .backgroundColor(Color.White)
+      }
+      .layoutWeight(1)
+      .height('100%')
     }
-    .height(CommonConstants.FULL_HEIGHT)
-    .width(CommonConstants.FULL_WIDTH)
+    .width(AdaptiveLayout.contentWidth(this.pageWidth - this.leftRectWidth - this.rightRectWidth - 40, 1120))
+    .layoutWeight(1)
+    .padding({ bottom: 16 })
+  }
+
+  build() {
+    Column() {
+      if (this.privacyCovered) {
+        Column({ space: 18 }) {
+          if (this.resumeAuthPending || (this.ownership === BookOwnership.PRIVATE && !this.accessFailed) ||
+            (this.privacyChecking && !this.accessFailed)) {
+            Text('正在验证访问权限…').fontSize(20).fontWeight(FontWeight.Medium)
+            LoadingProgress().width(36).height(36)
+          } else {
+            Text(BookAccessState.coverTitle(this.ownership, this.privacyChecking, this.accessFailed))
+              .fontSize(20).fontWeight(FontWeight.Medium)
+            Text(this.privacyError || '请重新检查书籍访问权限')
+              .fontSize(14).fontColor('#666666').textAlign(TextAlign.Center)
+            if (this.pageReady) {
+              Button('重新检查').onClick(() => this.refreshDetailAccess())
+            }
+            Button('返回书架').onClick(() => router.back())
+          }
+        }.width('100%').height('100%').padding(32)
+        .justifyContent(FlexAlign.Center)
+        .backgroundColor('#F6F7F9')
+      } else {
+        Column() { // todo 状态栏
+          Row() {
+
+          }.width(CommonConstants.FULL_WIDTH).height(this.topRectHeight)
+
+          // 标题栏
+          Row() { // 返回与标题
+            Row({ space: 12 }) {
+              Image($r("app.media.ic_public_return_left")).titleImageStyle().onClick(() => {
+                router.back()
+              })
+              Text('书籍详情').fontColor(Color.White).fontSize(16)
+            }.height(24)
+          }.padding({
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: 12
+          }).constraintSize({ minHeight: 48 }).width(CommonConstants.FULL_WIDTH)
+
+          if (this.pageWidth - this.leftRectWidth - this.rightRectWidth >= 840) {
+            this.wideDetails()
+          } else {
+            this.bookMetadata()
+            this.compactIntroduction()
+          }
+        }
+        .height(CommonConstants.FULL_HEIGHT)
+        .width(CommonConstants.FULL_WIDTH)
+        .backgroundColor($r('app.color.book_detail_background'))
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: this.leftRectWidth, right: this.rightRectWidth, bottom: this.bottomRectHeight })
     .backgroundColor($r('app.color.book_detail_background'))
-    }
+    .onAreaChange((_oldArea: Area, newArea: Area) => {
+      this.pageWidth = Number(newArea.width)
+    })
   }
 }

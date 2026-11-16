@@ -5,6 +5,8 @@ import { router } from '@kit.ArkUI';
 struct PrivacyAgreementPage {
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
   @State rowsData: Array<string> = [
     '本应用是纯本地阅读工具，不提供书源、网页抓取、订阅或服务器同步功能，不申请网络权限，不接入统计或崩溃报告服务。',
     '通过系统文件选择器访问您选择的文件或目录；导入时在应用沙箱内保存书籍副本，不删除原文件。书架、阅读进度和设置保存在本机，不上传至服务器。',
@@ -44,6 +46,7 @@ struct PrivacyAgreementPage {
       })
       .height(48)
       .width("100%")
+      .constraintSize({ maxWidth: 840 })
 
       // 内容区域
       Scroll() {
@@ -69,14 +72,17 @@ struct PrivacyAgreementPage {
         .width("100%")
         .padding({ bottom: this.bottomRectHeight + 20 })
       }
+      .width("100%")
+      .constraintSize({ maxWidth: 840 })
       .layoutWeight(1)
       .scrollBar(BarState.Off)
     }
-    .height("100%") // 设置外部 Column 高度为 100%
+    .width("100%")
+    .height("100%")
     .padding({
       top: this.topRectHeight,
-      left: 20,
-      right: 20
+      left: 20 + this.leftRectWidth,
+      right: 20 + this.rightRectWidth
     })
     .backgroundColor("rgb(245, 245, 245)")
   }

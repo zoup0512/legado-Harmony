@@ -2,6 +2,7 @@ import { PreferencesUtil } from '@pura/harmony-utils';
 import { ThemeStorageKey } from '../common/constants/Theme';
 import { ThemeItem } from '../common/model/Theme';
 import privacyFolderService from './PrivacyFolderService';
+import { AdaptiveLayout } from '../common/utils/AdaptiveLayout';
 
 const ONBOARDING_SHOWN_KEY: string = 'PrivacyOnboardingShown';
 const SPOT_SIZE: number = 52;
@@ -30,6 +31,9 @@ export class PrivacyOnboardingStore {
 export default struct PrivacyOnboarding {
   @Prop centerX: number = 0;
   @Prop centerY: number = 0;
+  @Prop viewportWidth: number = 0;
+  @Prop viewportHeight: number = 0;
+  @Prop rail: boolean = false;
   onTry: () => void = (): void => {};
   onLater: () => void = (): void => {};
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {
@@ -41,6 +45,26 @@ export default struct PrivacyOnboarding {
     return this.centerY - SPOT_SIZE / 2 - CARD_GAP;
   }
 
+  private cardWidth(): number {
+    const available = this.rail ? this.viewportWidth - 112 : this.viewportWidth - 48;
+    return AdaptiveLayout.panelWidth(Math.max(1, available));
+  }
+
+  private cardHeight(): number {
+    const available = this.rail ? this.viewportHeight - 48 : this.cardBottomY() - 24;
+    return Math.max(1, Math.min(400, available));
+  }
+
+  private cardX(): number {
+    return this.rail ? 88 + (this.viewportWidth - 88 - this.cardWidth()) / 2 :
+      (this.viewportWidth - this.cardWidth()) / 2;
+  }
+
+  private cardY(): number {
+    return this.rail ? Math.max(24, Math.min(this.centerY - this.cardHeight() / 2,
+      this.viewportHeight - this.cardHeight() - 24)) : Math.max(24, this.cardBottomY() - this.cardHeight());
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       // 遮罩：吞掉点击，避免误触下层书架
@@ -50,23 +74,27 @@ export default struct PrivacyOnboarding {
         .backgroundColor('rgba(0, 0, 0, 0.62)')
         .onClick((): void => {})
 
-      if (this.cardBottomY() > 0) {
+      if (this.rail || this.cardBottomY() > 24) {
         // 卡片底部指向“隐私”入口的小三角
         Row()
           .width(16)
           .height(16)
           .backgroundColor(Color.White)
           .rotate({ angle: 45 })
-          .position({ x: this.centerX - 8, y: this.cardBottomY() - 10 })
+          .position({ x: this.rail ? this.cardX() - 8 : this.centerX - 8,
+            y: this.rail ? this.centerY - 8 : this.cardBottomY() - 10 })
 
-        Column() {
+        Scroll() {
           this.Card()
         }
-        .width('100%')
-        .padding({ left: 24, right: 24 })
-        .position({ x: 0, y: 0 })
-        .height(this.cardBottomY())
-        .justifyContent(FlexAlign.End)
+        .width(this.cardWidth())
+        .height(this.cardHeight())
+        .position({ x: this.cardX(), y: this.cardY() })
+        .align(Alignment.Bottom)
+        .scrollBar(BarState.Auto)
+        .borderRadius(20)
+        .backgroundColor(Color.White)
+        .clip(true)
       }
 
       // 高亮的“隐私”入口

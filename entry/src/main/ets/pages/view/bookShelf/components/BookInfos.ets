@@ -29,22 +29,28 @@ export default struct BookInfos {
   onBatchManage: (book: Books) => void = () => {
   }
   @State delCache: boolean = false
-  bookInfoDialog: CustomDialogController | null = new CustomDialogController({
-    builder: BookInfoDialogs({
-      batchManage: this.batchManage,
-      onBatchManage: () => {
-        this.onBatchManage(this.book)
-      },
-      bookData: this.book, cancel: () => {
-        this.exitDialog()
-      }
-    }),
-    cancel: this.exitDialog,
-    autoCancel: true,
-    width: '100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle: true
-  })
+  bookInfoDialog: CustomDialogController | null = null
+
+  private openBookInfoDialog(): void {
+    // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
+    this.bookInfoDialog = new CustomDialogController({
+      builder: BookInfoDialogs({
+        batchManage: this.batchManage,
+        onBatchManage: () => {
+          this.onBatchManage(this.book)
+        },
+        bookData: this.book, cancel: () => {
+          this.exitDialog()
+        }
+      }),
+      cancel: this.exitDialog,
+      autoCancel: true,
+      width: '100%',
+      alignment: DialogAlignment.Bottom,
+      customStyle: true
+    })
+    this.bookInfoDialog.open()
+  }
 
   aboutToAppear(): void {
     this.loadProgress()
@@ -168,7 +174,7 @@ export default struct BookInfos {
     }).gesture(
       LongPressGesture({ repeat: false, duration: 500 })
         .onAction((event: GestureEvent) => {
-          this.bookInfoDialog?.open()
+          this.openBookInfoDialog()
         }))
   }
 

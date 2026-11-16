@@ -10,6 +10,8 @@ import { sleep } from '../../../common/utils/utils'
 struct CreateCustomTheme {
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
   // 颜色列表
   colorList: ThemeColorItem[] = [
     ThemeColor.RED,
@@ -97,59 +99,71 @@ struct CreateCustomTheme {
       })
       .width('100%')
       .height(48)
+      .constraintSize({ maxWidth: 840 })
       .backgroundColor('#fff')
 
-      // 截图区
-      Column() {
-        Image(this.previewIndexPage)
-          .width(240)
-          .backgroundColor('#ffdfca')
-          .objectFit(ImageFit.Cover)
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .padding({left: 60, right: 60, top: 72, bottom: 88})
-      .backgroundColor('#f5f5f5')
-
-      // 底部选色区
-      Row({space: 12}) {
-        Scroll() {
-          Row({space: 12}) {
-            ForEach(this.colorList, (item: ThemeItem) => {
-              Row() {
-
-              }
-              .width(40)
-              .aspectRatio(1)
-              .borderRadius(20)
-              .backgroundColor(item.mainColor)
-              .onClick(async () => {
-                let count = 10
-                while (count--) {
-                  themeManager.setTheme(item, AppStorage.get(ThemeStorageKey.THEMEINDEX) as number)
-                  this.selectTheme = item
-                  emitter.emit('screen_shot'); // 触发首页截图
-                  this.previewIndexPage = AppStorage.get('screen_shot') as PixelMap
-                  await sleep(100)
-                }
-              })
-            })
+      Scroll() {
+        Column() {
+          // 截图区
+          Column() {
+            Image(this.previewIndexPage)
+              .width('100%')
+              .constraintSize({ maxWidth: 240 })
+              .backgroundColor('#ffdfca')
+              .objectFit(ImageFit.Cover)
           }
-          .height('100%')
+          .width('100%')
+          .padding({left: 20, right: 20, top: 24, bottom: 24})
+          .backgroundColor('#f5f5f5')
+
+          // 底部选色区
+          Row({space: 12}) {
+            Scroll() {
+              Row({space: 12}) {
+                ForEach(this.colorList, (item: ThemeItem) => {
+                  Row() {
+
+                  }
+                  .width(40)
+                  .aspectRatio(1)
+                  .borderRadius(20)
+                  .backgroundColor(item.mainColor)
+                  .onClick(async () => {
+                    let count = 10
+                    while (count--) {
+                      themeManager.setTheme(item, AppStorage.get(ThemeStorageKey.THEMEINDEX) as number)
+                      this.selectTheme = item
+                      emitter.emit('screen_shot'); // 触发首页截图
+                      this.previewIndexPage = AppStorage.get('screen_shot') as PixelMap
+                      await sleep(100)
+                    }
+                  })
+                })
+              }
+              .height('100%')
+            }
+            .scrollable(ScrollDirection.Horizontal)
+            .scrollBar(BarState.Off)
+            .height('100%')
+          }
+          .height(72)
+          .width('100%')
+          .backgroundColor('#fff')
+          .padding({left: 20, right: 20, top: 16, bottom: 16})
         }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .height('100%')
+        .width('100%')
       }
-      .height(72)
       .width('100%')
-      .backgroundColor('#fff')
-      .padding({left: 20, right: 20, top: 16, bottom: 16})
+      .constraintSize({ maxWidth: 840 })
+      .layoutWeight(1)
+      .align(Alignment.Top)
+      .scrollBar(BarState.Off)
 
     }
     .width('100%')
     .height('100%')
-    .padding({top: this.topRectHeight, bottom: this.bottomRectHeight})
+    .padding({top: this.topRectHeight, bottom: this.bottomRectHeight,
+      left: this.leftRectWidth, right: this.rightRectWidth})
     .backgroundColor('#fff')
   }
 }

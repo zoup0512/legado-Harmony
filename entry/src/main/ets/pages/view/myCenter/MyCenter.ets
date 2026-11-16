@@ -3,7 +3,6 @@ import { dataItem } from '../../../componets/dataList/dataItem'
 import { PublicConstants } from '../../../common/constants/PublicConstants'
 import { ThemeStorageKey } from '../../../common/constants/Theme'
 import { ThemeItem } from '../../../common/model/Theme'
-import { ColumnModifier } from '../../../common/utils/ComponetModifier'
 import { common, Want } from '@kit.AbilityKit'
 import { BusinessError } from '@kit.BasicServicesKit'
 import Logger from '../../../common/utils/Logger'
@@ -19,10 +18,12 @@ export default struct MyCenter {
     new dataItem("用户隐私与协议", 3, $r("app.media.my_center_file_icon")),
     new dataItem("免责声明", 4, $r("app.media.my_center_about_icon")),
   ]
-  Column = new ColumnModifier()
   // 主题颜色：顶部（含状态栏）为主题色渐变沉浸式背景，与书架一致
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('bottomRectHeight') bottomRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
 
   private openReview(): void {
     const failureMessage = '无法打开应用市场，请稍后重试或前往应用市场搜索“隐私阅读器”进行评价'
@@ -57,8 +58,8 @@ export default struct MyCenter {
 
   build() {
     Column() {
-      // 外层 ColumnModifier 已处理左右内边距和顶部安全区
       TabPageTitle({ title: '我的', horizontalPadding: 0, topInset: this.topRectHeight === 0 ? 30 : 0 })
+        .width('100%').constraintSize({ maxWidth: 840 })
 
       Scroll() {
         Column() {
@@ -69,7 +70,7 @@ export default struct MyCenter {
               Image($r("app.media.right")).size({ width: 24, height: 24 })
             }
             .width("100%")
-            .height(45)
+            .constraintSize({ minHeight: 45 })
             .justifyContent(FlexAlign.SpaceBetween)
             .padding({
               top: 12,
@@ -86,12 +87,19 @@ export default struct MyCenter {
         .width("100%")
       }
       .layoutWeight(1)
+      .width('100%').constraintSize({ maxWidth: 840 })
       // 内容较少时在剩余空间内居中显示；超出时可正常滚动
       .align(Alignment.Center)
       .scrollBar(BarState.Off)
       .padding({ bottom: 10 })
     }
-    .attributeModifier(this.Column)
+    .width('100%')
+    .padding({
+      left: 20 + this.leftRectWidth,
+      right: 20 + this.rightRectWidth,
+      top: this.topRectHeight,
+      bottom: this.bottomRectHeight
+    })
     .linearGradient({
       direction: GradientDirection.Bottom, // 渐变方向
       colors: [[this.theme.mainColor, 0.0], [this.theme.secondColor, 0.2]]

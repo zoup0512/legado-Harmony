@@ -134,7 +134,7 @@ export default struct groupTypePanel {
                   this.dialogGroupData = item
                   // this.group = item
                   this.changeNumber = 1
-                  this.groupInfoDialog?.open()
+                  this.openGroupInfoDialog()
                 }))
             .width('25%')
           })
@@ -234,20 +234,26 @@ export default struct groupTypePanel {
 
   @State changeNumber: number = 0
   @State dialogGroupData: BookGroups = new BookGroups()
-  groupInfoDialog: CustomDialogController | null = new CustomDialogController({
-    builder: FolderInfoDialog({
-      itemData: this.dialogGroupData,
-      cancel: () => {
-        this.exitDialog()
-      }
-    }),
-    cancel: this.exitDialog,
-    autoCancel: true,
-    width: '100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle: true
+  groupInfoDialog: CustomDialogController | null = null
 
-  })
+  private openGroupInfoDialog(): void {
+    // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
+    this.groupInfoDialog = new CustomDialogController({
+      builder: FolderInfoDialog({
+        itemData: this.dialogGroupData,
+        cancel: () => {
+          this.exitDialog()
+        }
+      }),
+      cancel: this.exitDialog,
+      autoCancel: true,
+      width: '100%',
+      alignment: DialogAlignment.Bottom,
+      customStyle: true
+
+    })
+    this.groupInfoDialog.open()
+  }
 
   //退出弹框
   exitDialog() {

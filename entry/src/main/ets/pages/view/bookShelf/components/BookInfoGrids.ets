@@ -19,6 +19,7 @@ import BookCover from '../../../../componets/common/BookCover'
 export default struct BookInfoGrids{
 
   @Prop book:Books
+  @Prop coverWidth: number = 100
   batchManage: boolean = false
   onBatchManage: (book: Books) => void = () => {
   }
@@ -76,8 +77,8 @@ export default struct BookInfoGrids{
             customCoverUrl: this.book.customCoverUrl ?? '',
             bookName: this.book.bookName ?? '',
             author: this.book.author ?? '',
-            coverWidth: 100,
-            coverHeight: 120
+            coverWidth: this.coverWidth,
+            coverHeight: this.coverWidth * 1.2
           })
         }
         .alignContent(Alignment.BottomStart)
@@ -111,7 +112,7 @@ export default struct BookInfoGrids{
           .fontWeight(500)
           .maxLines(1)
       }
-      .width(100)
+      .width(this.coverWidth)
       .alignItems(HorizontalAlign.Start)
     }
     .alignItems(HorizontalAlign.Start)
@@ -131,27 +132,33 @@ export default struct BookInfoGrids{
     .gesture(
       LongPressGesture({ repeat: false,duration:500 })
         .onAction((event: GestureEvent) => {
-            this.bookInfoDialog?.open()
+            this.openBookInfoDialog()
         }))
   }
-  bookInfoDialog: CustomDialogController | null = new CustomDialogController({
-    builder: BookInfoDialogs({
-      batchManage: this.batchManage,
-      onBatchManage: () => {
-        this.onBatchManage(this.book)
-      },
-      bookData:this.book,
-      cancel: () => {
-        this.exitDialog()
-      }
-    }),
-    cancel: this.exitDialog,
-    autoCancel: true,
-    width:'100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle:true
+  bookInfoDialog: CustomDialogController | null = null
 
-  })
+  private openBookInfoDialog(): void {
+    // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
+    this.bookInfoDialog = new CustomDialogController({
+      builder: BookInfoDialogs({
+        batchManage: this.batchManage,
+        onBatchManage: () => {
+          this.onBatchManage(this.book)
+        },
+        bookData:this.book,
+        cancel: () => {
+          this.exitDialog()
+        }
+      }),
+      cancel: this.exitDialog,
+      autoCancel: true,
+      width: '100%',
+      alignment: DialogAlignment.Bottom,
+      customStyle:true
+
+    })
+    this.bookInfoDialog.open()
+  }
   //退出弹框
   exitDialog(){
     this.bookInfoDialog?.close()

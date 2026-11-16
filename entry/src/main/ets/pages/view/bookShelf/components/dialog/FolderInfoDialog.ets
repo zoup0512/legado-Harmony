@@ -100,6 +100,8 @@ export default struct FolderInfoDialog{
     .borderRadius({topLeft:20,topRight:20})
     .backgroundColor(Color.White)
     .width('100%')
+    .constraintSize({ maxWidth: 560 })
+    .align(Alignment.Bottom)
   }
 
   //书单弹窗
@@ -127,7 +129,7 @@ export default struct FolderInfoDialog{
       case 4 :
         this.isCatalogAddShelf = true;break;
       case 5 :
-        this.coverDialog?.open();
+        this.openCoverDialog();
         break;
       case 6 :
         showMessage('隐藏分组');
@@ -314,19 +316,25 @@ export default struct FolderInfoDialog{
     },500)
   }
 
-  coverDialog: CustomDialogController | null = new CustomDialogController({
-    builder: coverInfoDialog({
-      itemData:this.itemData,
-      cancel:()=>{
-        this.coverCancel()
-      }
-    }),
-    cancel: this.coverCancel,
-    autoCancel: true,
-    width:'100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle:true
-  })
+  coverDialog: CustomDialogController | null = null
+
+  private openCoverDialog(): void {
+    // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
+    this.coverDialog = new CustomDialogController({
+      builder: coverInfoDialog({
+        itemData:this.itemData,
+        cancel:()=>{
+          this.coverCancel()
+        }
+      }),
+      cancel: this.coverCancel,
+      autoCancel: true,
+      width: '100%',
+      alignment: DialogAlignment.Bottom,
+      customStyle:true
+    })
+    this.coverDialog.open()
+  }
 
   coverCancel(){
     this.coverDialog?.close()

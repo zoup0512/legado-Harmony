@@ -6,6 +6,8 @@ import { router } from '@kit.ArkUI';
 struct AboutUsPage {
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
   @State end_list: dataItem[] = [
     new dataItem("用户隐私与协议", 1),
     new dataItem("免责声明", 3),
@@ -64,14 +66,18 @@ struct AboutUsPage {
         this.middleClick(this.end_list, "app.media.right")
       }
       .padding({
-        left: 20,
-        right: 20,
+        left: 20 + this.leftRectWidth,
+        right: 20 + this.rightRectWidth,
         top: this.topRectHeight,
         bottom: this.bottomRectHeight
       })
-      .height("100%")
-      .backgroundColor("rgb(245, 245, 245)")
+      .width("100%")
+      .constraintSize({ maxWidth: 840 })
     }
+    .width("100%")
+    .height("100%")
+    .align(Alignment.Top)
+    .backgroundColor("rgb(245, 245, 245)")
   }
 
   @Builder

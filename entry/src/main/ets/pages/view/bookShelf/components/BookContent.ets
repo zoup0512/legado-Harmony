@@ -8,10 +8,17 @@ import BookInfos from './BookInfos'
 import { router } from '@kit.ArkUI'
 import bookCoverBackfill from '../../../../common/utils/BookCoverBackfill'
 import ThemedEmptyImage from '../../../../componets/common/ThemedEmptyImage'
+import { AdaptiveLayout } from '../../../../common/utils/AdaptiveLayout'
 
 @Component
 export default struct BookContent {
   @State bookList:Books[] = []
+  @State contentWidth: number = 0
+
+  private gridCoverWidth(): number {
+    return this.contentWidth > 0 ?
+      Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100
+  }
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>()
 
@@ -132,40 +139,48 @@ export default struct BookContent {
       }
       .margin({ top: 120 })
     } else {
-      List({
-        space:this.EXHIBIT === '宫格' ? 10 : 0,
-        scroller:this.scroller
-      }){
-       ForEach(this.bookList, (item: Books,index:number) => {
-          ListItem(){
-            if (this.EXHIBIT === '宫格') {
-              BookInfoGrids({
-                book:item,
-                batchManage: true,
-                onBatchManage: (book: Books) => { this.openManage(book) }
-              })
-            } else {
-              BookInfos({
-                book:item,
-                batchManage: true,
-                onBatchManage: (book: Books) => { this.openManage(book) }
-              })
+      Column() {
+        List({
+          space:this.EXHIBIT === '宫格' ? 10 : 0,
+          scroller:this.scroller
+        }){
+          ForEach(this.bookList, (item: Books,index:number) => {
+            ListItem(){
+              if (this.EXHIBIT === '宫格') {
+                BookInfoGrids({
+                  book:item,
+                  coverWidth: this.gridCoverWidth(),
+                  batchManage: true,
+                  onBatchManage: (book: Books) => { this.openManage(book) }
+                })
+              } else {
+                BookInfos({
+                  book:item,
+                  batchManage: true,
+                  onBatchManage: (book: Books) => { this.openManage(book) }
+                })
+              }
             }
+          })
+        }
+        .alignListItem(ListItemAlign.Center)
+        .layoutWeight(1)
+        .width(this.EXHIBIT === '宫格' || this.contentWidth <= 0 ? '100%' : AdaptiveLayout.contentWidth(this.contentWidth))
+        .lanes(this.EXHIBIT === '宫格' ? AdaptiveLayout.shelfColumns(this.contentWidth) : 1)
+        .divider(this.EXHIBIT === '宫格' ? null : { strokeWidth: 0.5, color: '#F0F0F0', startMargin: 90, endMargin: 16 })
+        .scrollBar(BarState.Off)
+        .onReachEnd(() => {
+          if (this.bookList.length < this.bookCount) {
+            this.loadMoreBooks()
           }
         })
+        .margin({ bottom: 20 })
       }
-      .alignListItem(ListItemAlign.Center)
+      .width('100%')
       .layoutWeight(1)
-      .lanes(this.EXHIBIT === '宫格' ? 3 : 1)
-      .divider(this.EXHIBIT === '宫格' ? null : { strokeWidth: 0.5, color: '#F0F0F0', startMargin: 90, endMargin: 16 })
-      .scrollBar(BarState.Off)
-      .onReachEnd(() => {
-        if (this.bookList.length < this.bookCount) {
-          this.loadMoreBooks()
-        }
-      })
-      .margin({
-        bottom: 20
+      .alignItems(HorizontalAlign.Center)
+      .onAreaChange((_oldArea: Area, area: Area) => {
+        this.contentWidth = Number(area.width)
       })
     }
   }

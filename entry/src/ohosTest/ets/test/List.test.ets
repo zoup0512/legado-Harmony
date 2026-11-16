@@ -17,6 +17,8 @@ import privateBookAutoUnlockTest from './PrivateBookAutoUnlock.test'
 import dbUtilQueryTest from './DbUtilQuery.test'
 import databaseInitTest from './DatabaseInit.test'
 import loggerTest from './Logger.test'
+import adaptiveLayoutTest from './AdaptiveLayout.test'
+import readerViewportLogicTest from './ReaderViewportLogic.test'
 
 export default function testsuite() {
   abilityTest()
@@ -38,4 +40,6 @@ export default function testsuite() {
   dbUtilQueryTest()
   databaseInitTest()
   loggerTest()
+  adaptiveLayoutTest()
+  readerViewportLogicTest()
 }

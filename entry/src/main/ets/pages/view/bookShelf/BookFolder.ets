@@ -7,6 +7,7 @@ import { BookGroups } from '../../../database/entities/BookGroups'
 import BookManageDialog from './components/dialog/BookManageDialog'
 import FolderInfoDialog from './components/dialog/FolderInfoDialog'
 import { BookCoverLogic } from '../../../common/utils/BookCoverLogic'
+import { AdaptiveLayout } from '../../../common/utils/AdaptiveLayout'
 
 /**
  * 文件夹
@@ -15,6 +16,13 @@ import { BookCoverLogic } from '../../../common/utils/BookCoverLogic'
 export default struct BookFolder {
   @Prop EXHIBIT: string
   currentIndex: number = 0
+  @State contentWidth: number = 0
+
+  private gridCoverWidth(): number {
+    return this.contentWidth > 0 ?
+      Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100
+  }
+
   @State changeNumber: number = 0
   @State isShowBookFolderInfoDialog: boolean = false
   @StorageLink('BOOK_IS_BOOK_GROUPS_REFRESHING') @Watch('getGroupList') BOOK_IS_BOOK_GROUPS_REFRESHING: number = 0
@@ -35,7 +43,7 @@ export default struct BookFolder {
 
   build() {
     GridRow({
-      columns: this.EXHIBIT === '宫格' ? 3 : 1
+      columns: this.EXHIBIT === '宫格' ? AdaptiveLayout.shelfColumns(this.contentWidth) : 1
     }) {
       ForEach(this.groupList, (item: BookGroups) => {
         if (item.show && !item.isSystem) {
@@ -53,7 +61,7 @@ export default struct BookFolder {
               .onAction((event: GestureEvent) => {
                 this.dialogGroupData = item
                 this.changeNumber = 1
-                this.groupInfoDialog?.open()
+                this.openGroupInfoDialog()
               }))
           .onClick(() => {
             this.isShowBookFolderInfoDialog = true
@@ -62,6 +70,10 @@ export default struct BookFolder {
         }
       })
     }
+    .width('100%')
+    .onAreaChange((_oldArea: Area, area: Area) => {
+      this.contentWidth = Number(area.width)
+    })
     .bindSheet($$this.isShowBookFolderInfoDialog, this.bookFolderInfoDialog(), {
       detents: [SheetSize.MEDIUM, SheetSize.LARGE, 200],
       showClose: false,
@@ -108,8 +120,8 @@ export default struct BookFolder {
                 Image(BookCoverLogic.displaySource(item.coverUrl, $r('app.media.icon_book_default_cover_one')))
                   .draggable(false)
                   .alt($r('app.media.icon_book_default_cover_one'))
-                  .width(88)
-                  .height(120)
+                  .width(this.gridCoverWidth() * 0.88)
+                  .height(this.gridCoverWidth() * 1.2)
               }.alignContent(Alignment.BottomStart)
             }
             .zIndex(2)
@@ -119,18 +131,18 @@ export default struct BookFolder {
                 Image($r('app.media.occlusion1')).draggable(false)
               }
               .zIndex(1)
-              .width(95).height(110)
+              .width(this.gridCoverWidth() * 0.95).height(this.gridCoverWidth() * 1.1)
 
               Row() {
                 Image($r('app.media.occlusion2'))
               }.zIndex(0)
-              .width(100).height(100)
+              .width(this.gridCoverWidth()).height(this.gridCoverWidth())
             }
           }
           .align(Alignment.BottomStart)
         }
 
-        Row().width(100).height(20).backgroundColor('rgba(255, 255, 255, 0.6)').borderRadius(10)
+        Row().width(this.gridCoverWidth()).height(20).backgroundColor('rgba(255, 255, 255, 0.6)').borderRadius(10)
       }
 
       Text(item.groupName)
@@ -151,6 +163,7 @@ export default struct BookFolder {
         .fontWeight(500)
         .maxLines(1)
     }
+    .width(this.gridCoverWidth() + 16)
     .borderRadius(8)
     .alignItems(HorizontalAlign.Start)
     .padding({
@@ -214,20 +227,26 @@ export default struct BookFolder {
   }
 
   @State dialogGroupData: BookGroups = new BookGroups()
-  groupInfoDialog: CustomDialogController | null = new CustomDialogController({
-    builder: FolderInfoDialog({
-      itemData: this.dialogGroupData,
-      cancel: () => {
-        this.exitDialog()
-      }
-    }),
-    cancel: this.exitDialog,
-    autoCancel: true,
-    width: '100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle: true
+  groupInfoDialog: CustomDialogController | null = null
 
-  })
+  private openGroupInfoDialog(): void {
+    // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
+    this.groupInfoDialog = new CustomDialogController({
+      builder: FolderInfoDialog({
+        itemData: this.dialogGroupData,
+        cancel: () => {
+          this.exitDialog()
+        }
+      }),
+      cancel: this.exitDialog,
+      autoCancel: true,
+      width: '100%',
+      alignment: DialogAlignment.Bottom,
+      customStyle: true
+
+    })
+    this.groupInfoDialog.open()
+  }
 
   //退出弹框
   exitDialog() {

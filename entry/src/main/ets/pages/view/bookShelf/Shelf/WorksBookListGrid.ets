@@ -7,6 +7,7 @@ import { BookCoverLogic } from '../../../../common/utils/BookCoverLogic'
 export default struct WorksBookListGrid {
 
   @Prop work:WorksLists
+  @Prop coverWidth: number = 100
   @Prop isShowCheck:boolean
   @Link checkGroup:Record<number, boolean>
   onSelect:Function = () => {}
@@ -37,7 +38,7 @@ export default struct WorksBookListGrid {
           }
           .zIndex(3)
           .backgroundColor('rgba(0,0,0,0.45)')
-          .width(88).height(120)
+          .width(this.coverWidth * 0.88).height(this.coverWidth * 1.2)
         }
           Stack(){
             if (this.work.isTop){
@@ -53,8 +54,8 @@ export default struct WorksBookListGrid {
             Image(BookCoverLogic.displaySource(this.work.worksCoverUrl, $r('app.media.icon_book_default_cover_one')))
               .draggable(false)
               .alt($r('app.media.icon_book_default_cover_one'))
-              .width(88)
-              .height(120)
+              .width(this.coverWidth * 0.88)
+              .height(this.coverWidth * 1.2)
           }
           .zIndex(2)
           .alignContent(Alignment.BottomStart)
@@ -63,20 +64,20 @@ export default struct WorksBookListGrid {
             .draggable(false)
         }
         .zIndex(1)
-        .width(95)
-        .height(110)
+        .width(this.coverWidth * 0.95)
+        .height(this.coverWidth * 1.1)
 
         Row() {
           Image($r('app.media.occlusion2'))
             .draggable(false)
         }
         .zIndex(0)
-        .width(100)
-        .height(100)
+        .width(this.coverWidth)
+        .height(this.coverWidth)
       }
       .align(Alignment.BottomStart)
 
-      Row().width(100).height(20).backgroundColor('rgba(255, 255, 255, 0.6)').borderRadius(10)
+      Row().width(this.coverWidth).height(20).backgroundColor('rgba(255, 255, 255, 0.6)').borderRadius(10)
 
       Text(this.work.worksName)
           .fontSize(15)
@@ -94,6 +95,7 @@ export default struct WorksBookListGrid {
           .fontWeight(500)
           .maxLines(1)
     }
+    .width(this.coverWidth + 16)
     .alignItems(HorizontalAlign.Start)
     .padding({ left:8,right:8,bottom:5,top:5 })
   }

@@ -4,6 +4,7 @@ import { BookGroups } from '../../../../../database/entities/BookGroups'
 import BookFolderGridManage from './BookFolderGridManage'
 import BookFolderInfoManage from './BookFolderInfoManage'
 import ThemedEmptyImage from '../../../../../componets/common/ThemedEmptyImage'
+import { AdaptiveLayout } from '../../../../../common/utils/AdaptiveLayout'
 
 @Component
 export default struct BookFolderManages {
@@ -11,6 +12,13 @@ export default struct BookFolderManages {
   @Link checkGroup:Record<number, boolean>
   @Prop EXHIBIT:string
   @State delCache:boolean = false
+  @State contentWidth: number = 0
+
+  private gridCoverWidth(): number {
+    return this.contentWidth > 0 ?
+      Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100
+  }
+
   @Prop isManage:boolean = true
   onSelect:Function = () => {}
   bookInfoDel: CustomDialogController | null = new CustomDialogController({
@@ -67,13 +75,14 @@ export default struct BookFolderManages {
          })
        } else {
          GridRow({
-           columns:3
+           columns: AdaptiveLayout.shelfColumns(this.contentWidth)
          }){
            ForEach(this.bookGroups, (item: BookGroups) => {
              if (item.show && !item.isSystem) {
                GridCol(){
                  BookFolderGridManage({
                    group:item,
+                   coverWidth: this.gridCoverWidth(),
                    checkGroup:this.checkGroup,
                    isManage:this.isManage,
                    onSelect:()=>{
@@ -85,7 +94,11 @@ export default struct BookFolderManages {
            })
          }
        }
-     }.layoutWeight(1)
+     }
+     .width('100%')
+     .onAreaChange((_oldArea: Area, area: Area) => {
+       this.contentWidth = Number(area.width)
+     })
    }
  }
 }

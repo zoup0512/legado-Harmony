@@ -73,6 +73,8 @@ export default struct worksBookInfoDialog{
     .borderRadius({topLeft:20,topRight:20})
     .backgroundColor(Color.White)
     .width('100%')
+    .constraintSize({ maxWidth: 560 })
+    .align(Alignment.Bottom)
   }
   @State isShowEditBook:boolean = false
   @StorageLink('BOOK_IS_BOOK_WORKS_BOOK_LIST') isWorksBookListRefreshing: number = 0

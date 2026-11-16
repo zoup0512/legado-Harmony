@@ -23,6 +23,8 @@ import privacyForeground from '../../../privacy/PrivacyForeground';
 import { PrivateBookAutoUnlock, PrivateBookUnlockSnapshot } from '../../../privacy/PrivateBookAutoUnlock';
 import { ThemeStorageKey } from '../../../common/constants/Theme';
 import { ThemeItem } from '../../../common/model/Theme';
+import { AdaptiveLayout } from '../../../common/utils/AdaptiveLayout';
+import { ReaderPreferences, ReaderViewportLogic } from '../../../componets/Reader/ReaderViewportLogic';
 
 interface ParamsObj {
   bookData: Books,
@@ -38,12 +40,20 @@ interface themeItem {
 @Entry
 @Component
 struct ReaderPage3 {
-  @StorageLink('windowWidth') windowWidth: number = 0;
-  @StorageLink('windowHeight') windowHeight: number = 0;
+  @StorageProp('windowWidthVp') windowWidthVp: number = 0;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 0;
+  @State availableWidthVp: number = 0;
+  @State availableHeightVp: number = 0;
+  private viewport: ReaderViewportLogic = new ReaderViewportLogic();
+  private surfaceReady: Promise<void> = Promise.resolve();
+  private resolveSurfaceReady: (() => void) | undefined;
+  private resizeTimer: number = -1;
   @StorageLink('colorMode') @Watch('colorModeChange') colorMode: ConfigurationConstant.ColorMode =
     ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET;
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   @State ReaderPadding: number = 24 // 边距
@@ -76,11 +86,9 @@ struct ReaderPage3 {
     themeColor: 'rgba(248, 249, 250, 1)',
     themeBgImg: '',
     flipMode: '0',
-    scaledDensity: display.getDefaultDisplaySync().scaledDensity > 0 ?
-    display.getDefaultDisplaySync().scaledDensity :
-      1,
-    viewPortWidth: this.windowWidth,
-    viewPortHeight: this.windowHeight
+    scaledDensity: 1,
+    viewPortWidth: 0,
+    viewPortHeight: 0
   };
   private screenDensityCallBack: Callback<number> | null = null;
   private BookHandler: bookParser.BookParserHandler | null = null;
@@ -148,7 +156,6 @@ struct ReaderPage3 {
         Logger.debug('Reader session changed');
       });
       this.registerScreenDensityChange();
-      this.registerListener();
       // 进入阅读页面后隐藏系统状态栏
       WindowAbility.getInstance().toggleWindowSystemBar([], this.getUIContext().getHostContext());
       const temp = router.getParams() as ParamsObj
@@ -161,8 +168,10 @@ struct ReaderPage3 {
         return PreferencesUtil.hasSync(key) ? PreferencesUtil.getSync(key, new Books()) as Books : undefined;
       });
       try {
-        this.readerSetting = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
-          this.readerSetting) as readerCore.ReaderSetting;
+        const saved = PreferencesUtil.getSync(`ReaderSetting_${this.bookData.bookName}`,
+          this.readerPreferences()) as ReaderPreferences;
+        // Explicitly omit legacy persisted viewPortWidth/Height/scaledDensity.
+        this.restoreReaderPreferences(saved);
       } catch (_) {
         Logger.warn('Reader settings unavailable; using defaults');
       }
@@ -231,6 +240,8 @@ struct ReaderPage3 {
   private createReaderRuntime(requestId: number): ReaderRuntime {
     const runtime = new ReaderRuntime(++this.nextRuntimeId, requestId, privacySessionService.getGeneration());
     this.runtime = runtime;
+    this.viewport.begin(runtime.id);
+    this.surfaceReady = new Promise<void>((resolve) => { this.resolveSurfaceReady = resolve; });
     this.readerComponentController = runtime.controller;
     this.bindReaderListener(runtime);
     this.syncFontResourceListener();
@@ -240,6 +251,11 @@ struct ReaderPage3 {
   }
 
   private releaseReader(): void {
+    this.clearResizeTimer();
+    this.viewport.dispose();
+    this.resolveSurfaceReady = undefined;
+    this.isShowFontPicker = false;
+    this.isShowMoreLayout = false;
     const runtime = this.runtime;
     this.runtime = undefined;
     this.readerComponentController = undefined;
@@ -337,7 +353,9 @@ struct ReaderPage3 {
       const localPath = requireReadableLocalBookPath(path);
       const parserPromise = runtime.scope.wait(bookParser.getDefaultHandler(localPath), 15000, '书籍解析超时，请重试');
       const readyPromise = runtime.scope.wait(runtime.ready, 10000, '阅读器初始化超时，请重试');
-      const result: [bookParser.BookParserHandler, void] = await Promise.all([parserPromise, readyPromise]);
+      const surfacePromise = runtime.scope.wait(this.surfaceReady, 10000, '阅读区域初始化超时，请重试');
+      const result: [bookParser.BookParserHandler, void, void] =
+        await Promise.all([parserPromise, readyPromise, surfacePromise]);
       if (!this.isCurrentRuntime(runtime)) return;
       runtime.parser = result[0];
       this.BookHandler = runtime.parser;
@@ -354,7 +372,10 @@ struct ReaderPage3 {
       const safeIndex = Math.max(0, Math.min(resourceIndex || 0, catalog.length - 1));
       this.bookData.durChapterIndex = safeIndex;
       runtime.controller.registerBookParser(runtime.parser);
+      // Restore choices first, but always use this runtime's measured surface and current density.
+      if (!this.updateMeasuredViewport(runtime)) throw new Error('阅读区域尺寸无效，请重试');
       runtime.controller.setPageConfig(this.readerSetting);
+      this.viewport.applied();
       Logger.debug('Reader instance starting');
       await runtime.scope.wait(runtime.controller.startPlay(safeIndex, domPos), 15000, '正文启动超时，请重试');
       if (!this.isCurrentRuntime(runtime)) return;
@@ -362,6 +383,8 @@ struct ReaderPage3 {
       if (!this.isCurrentRuntime(runtime)) return;
       this.readerStarted = true;
       this.readerLoading = false;
+      // Changes while init/startPlay/firstFrame were pending must not be lost.
+      if (this.viewport.pending()) this.scheduleReaderConfig();
       Logger.debug('Reader first frame ready');
     } catch (err) {
       if (this.runtime === runtime && this.isCurrentAccessRequest(requestId, runtime.generation)) {
@@ -395,23 +418,16 @@ struct ReaderPage3 {
       this.readerSetting.fontColor = '#000000';
       this.readerSetting.themeColor = '#FFFFFF';
     }
-    if (this.BookHandler) {
-      this.readerComponentController?.setPageConfig(this.readerSetting);
-    }
+    this.readerPreferencesChanged();
   }
 
-  /**
-   * 注册屏幕密度变化回调。
-   */
+  /** Density changes reflow the current surface; never reopen/reuse an old reader. */
   registerScreenDensityChange() {
-    this.screenDensityCallBack = (data: number) => {
-      let displaySync = display.getDefaultDisplaySync();
-      let scaledDensity = displaySync.scaledDensity;
-      if (scaledDensity !== this.readerSetting.scaledDensity) {
-        AppStorage.setOrCreate('isDensityChange', true);
-        this.getUIContext().getRouter().back();
-      }
-    }
+    this.screenDensityCallBack = (_data: number): void => {
+      if (!this.pageActive) return;
+      this.viewport.changed();
+      this.scheduleReaderConfig();
+    };
     display.on('change', this.screenDensityCallBack);
   }
 
@@ -437,27 +453,99 @@ struct ReaderPage3 {
       // 保存书籍数据。
       PreferencesUtil.putSync(`BookCurrentData_${this.bookData.bookName}`, this.bookData)
       //  保存阅读器设置。
-      PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerSetting)
+      this.saveReaderPreferences();
     });
   }
 
-  private registerListener(): void {
-    WindowAbility.getInstance().onWindowSizeChange(() => {
-      if (!this.canReadCurrentBook() || !this.BookHandler) {
-        return;
+  private onReaderAreaChange(runtime: ReaderRuntime, area: Area): void {
+    if (!this.isCurrentRuntime(runtime)) return;
+    const width = Number(area.width);
+    const height = Number(area.height);
+    if (!this.viewport.measure(runtime.id, width, height)) return;
+    this.resolveSurfaceReady?.();
+    this.resolveSurfaceReady = undefined;
+    this.scheduleReaderConfig();
+  }
+
+  private updateMeasuredViewport(runtime: ReaderRuntime): boolean {
+    if (!this.isCurrentRuntime(runtime)) return false;
+    const uiContext = this.getUIContext();
+    const setting = this.viewport.configuration(runtime.id, this.readerPreferences(),
+      (value: number): number => uiContext.vp2px(value), display.getDefaultDisplaySync().scaledDensity);
+    if (!setting) return false;
+    this.readerSetting.viewPortWidth = setting.viewPortWidth;
+    this.readerSetting.viewPortHeight = setting.viewPortHeight;
+    this.readerSetting.scaledDensity = setting.scaledDensity;
+    return true;
+  }
+
+  private clearResizeTimer(): void {
+    if (this.resizeTimer !== -1) clearTimeout(this.resizeTimer);
+    this.resizeTimer = -1;
+  }
+
+  private scheduleReaderConfig(): void {
+    this.clearResizeTimer();
+    const runtime = this.runtime;
+    // During initialization the revision remains dirty and is flushed after firstFrame.
+    if (!runtime || !this.isCurrentRuntime(runtime) || !this.readerStarted || !this.viewport.pending()) return;
+    this.resizeTimer = setTimeout((): void => {
+      this.resizeTimer = -1;
+      try {
+        if (!this.readerStarted || !this.viewport.pending() || !this.updateMeasuredViewport(runtime)) return;
+        runtime.controller.setPageConfig(this.readerSetting);
+        this.viewport.applied();
+      } catch (error) {
+        Logger.error('Reader layout update failed', Logger.errorSummary(error));
       }
-      if (this.readerSetting.viewPortWidth != this.windowWidth ||
-        this.readerSetting.viewPortHeight != this.windowHeight) {
-        // 当窗口大小更改时，更新当前页面视区大小。
-        this.readerSetting.viewPortWidth = this.windowWidth;
-        this.readerSetting.viewPortHeight = this.windowHeight;
-        try {
-          this.readerComponentController?.setPageConfig(this.readerSetting);
-        } catch (e) {
-          Logger.error('Reader window size update failed', Logger.errorSummary(e));
-        }
-      }
-    });
+    }, 120);
+  }
+
+  private readerPreferences(): ReaderPreferences {
+    return {
+      fontName: this.readerSetting.fontName,
+      fontPath: this.readerSetting.fontPath,
+      fontSize: this.readerSetting.fontSize,
+      fontColor: this.readerSetting.fontColor,
+      fontWeight: this.readerSetting.fontWeight,
+      lineHeight: this.readerSetting.lineHeight,
+      nightMode: this.readerSetting.nightMode,
+      themeColor: this.readerSetting.themeColor,
+      themeBgImg: this.readerSetting.themeBgImg,
+      flipMode: this.readerSetting.flipMode
+    };
+  }
+
+  private restoreReaderPreferences(saved: ReaderPreferences): void {
+    const preferences = ReaderViewportLogic.preferences(saved, this.readerPreferences());
+    this.readerSetting.fontName = preferences.fontName;
+    this.readerSetting.fontPath = preferences.fontPath;
+    this.readerSetting.fontSize = preferences.fontSize;
+    this.readerSetting.fontColor = preferences.fontColor;
+    this.readerSetting.fontWeight = preferences.fontWeight;
+    this.readerSetting.lineHeight = preferences.lineHeight;
+    this.readerSetting.nightMode = preferences.nightMode;
+    this.readerSetting.themeColor = preferences.themeColor;
+    this.readerSetting.themeBgImg = preferences.themeBgImg;
+    this.readerSetting.flipMode = preferences.flipMode;
+  }
+
+  private saveReaderPreferences(): void {
+    PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerPreferences());
+  }
+
+  private readerPreferencesChanged(): void {
+    this.viewport.changed();
+    if (this.pageReady && this.canReadCurrentBook()) this.saveReaderPreferences();
+    this.scheduleReaderConfig();
+  }
+
+  private panelWidth(): number {
+    return AdaptiveLayout.panelWidth((this.availableWidthVp || this.windowWidthVp) - this.leftRectWidth - this.rightRectWidth);
+  }
+
+  private menuMaxHeight(): number {
+    return Math.max(0, (this.availableHeightVp || this.windowHeightVp) - this.topRectHeight - 100);
   }
 
   aboutToDisappear(): void {
@@ -478,6 +566,7 @@ struct ReaderPage3 {
 
   build() {
     Stack() {
+      Stack() {
       ForEach(this.readerRuntimes, (runtime: ReaderRuntime) => {
         ReadPageComponent({
           controller: runtime.controller,
@@ -488,11 +577,17 @@ struct ReaderPage3 {
             }
           }
         }).width('100%').height('100%')
+          .onAreaChange((_oldArea: Area, newArea: Area): void => this.onReaderAreaChange(runtime, newArea))
           .visibility(this.privacyCovered ? Visibility.Hidden : Visibility.Visible)
           .onAppear(() => {
             runtime.initialize(this.getUIContext().getHostContext() as common.UIAbilityContext);
           })
       }, (runtime: ReaderRuntime): string => runtime.id.toString())
+      }
+      .width('100%')
+      .constraintSize({ maxWidth: AdaptiveLayout.readerWidth(800) })
+      .height('100%')
+      .clip(true)
 
       if (!this.privacyCovered) {
       if (this.readerLoading || this.readerError.length > 0) {
@@ -555,6 +650,7 @@ struct ReaderPage3 {
 
             Divider()
           }
+          .width(this.panelWidth())
           .padding({ top: this.topRectHeight == 0 ? 40 : 0 })
           .backgroundColor(this.colorMode == 0 ? '#1F1F1F' : 'rgba(250, 250, 250, 1)')
           .transition(TransitionEffect.move(TransitionEdge.TOP).animation({ duration: 500 }))
@@ -563,7 +659,8 @@ struct ReaderPage3 {
             this.isShowSetting = false
           })
 
-          // 阅读器-下方弹框
+          // Bounded reading controls; the complete settings content scrolls on short windows.
+          Scroll() {
           Column({ space: 20 }) {
             Divider()
 
@@ -660,7 +757,7 @@ struct ReaderPage3 {
                     .layoutWeight(1)
                     .onChange((value) => {
                       this.readerSetting.fontSize = value
-                      this.readerComponentController?.setPageConfig(this.readerSetting);
+                      this.readerPreferencesChanged();
                     })
                   Button(this.readerSetting.fontName === '' || this.readerSetting.fontName === SYSTEM_FONT_NAME
                     ? '字体' : `字体·${this.readerSetting.fontName}`)
@@ -673,6 +770,8 @@ struct ReaderPage3 {
                     })
                     .bindSheet($$this.isShowFontPicker, this.FontPickerDialog(), {
                       detents: ['60%'],
+                      width: this.panelWidth(),
+                      preferType: (this.availableWidthVp || this.windowWidthVp) >= 600 ? SheetType.CENTER : SheetType.BOTTOM,
                       dragBar: false,
                       showClose: false,
                       onDisappear: () => {
@@ -698,7 +797,7 @@ struct ReaderPage3 {
                     .layoutWeight(1)
                     .onChange((value) => {
                       this.readerSetting.lineHeight = value
-                      this.readerComponentController?.setPageConfig(this.readerSetting);
+                      this.readerPreferencesChanged();
                     })
                   /*Row() {
                     Button('更多').bindSheet($$this.isShowMoreLayout, this.LayoutMoreDialog(), {
@@ -745,7 +844,7 @@ struct ReaderPage3 {
                           this.readerSetting.fontColor = item.fontColor;
                           this.readerSetting.themeColor = item.themeColor;
                           this.readerSetting.themeBgImg = item.themeBgImg;
-                          this.readerComponentController?.setPageConfig(this.readerSetting);
+                          this.readerPreferencesChanged();
                         })
                       })
                     }
@@ -772,7 +871,7 @@ struct ReaderPage3 {
                         this.readerSetting.flipMode = '0';
                         promptAction.showToast({ message: '仿真' })
                       }
-                      this.readerComponentController?.setPageConfig(this.readerSetting);
+                      this.readerPreferencesChanged();
                     })
                   // Button('更多设置')
                 }
@@ -795,6 +894,8 @@ struct ReaderPage3 {
                 })
                 .bindSheet($$this.isShowCatalogDialog, this.CatalogDialog(), {
                   detents: ['90%'],
+                  width: this.panelWidth(),
+                  preferType: (this.availableWidthVp || this.windowWidthVp) >= 600 ? SheetType.CENTER : SheetType.BOTTOM,
                   dragBar: false,
                   showClose: false,
                   onDisappear: () => {
@@ -822,7 +923,7 @@ struct ReaderPage3 {
                     this.readerSetting.fontColor = '#000000';
                     this.readerSetting.themeColor = '#FFFFFF';
                   }
-                  this.readerComponentController?.setPageConfig(this.readerSetting);
+                  this.readerPreferencesChanged();
                 })
               }
 
@@ -840,6 +941,12 @@ struct ReaderPage3 {
               }
             }.columnsTemplate("1fr 1fr 1fr").width("100%").height(60)
           }
+          .width('100%')
+          .padding({ bottom: Math.max(12, this.bottomRectHeight) })
+          }
+          .width(this.panelWidth())
+          .constraintSize({ maxHeight: this.menuMaxHeight() })
+          .scrollBar(BarState.Auto)
           .backgroundColor(this.colorMode == 0 ? '#1F1F1F' : 'rgba(248, 249, 250, 1)')
           .transition(TransitionEffect.move(TransitionEdge.BOTTOM).animation({ duration: 500 }))
         }
@@ -870,7 +977,14 @@ struct ReaderPage3 {
         .justifyContent(FlexAlign.Center)
         .backgroundColor('#F6F7F9')
       }
-    }.width('100%').height('100%').onClick(() => {
+    }.width('100%').height('100%')
+    .padding({ left: this.leftRectWidth, right: this.rightRectWidth })
+    .backgroundColor(this.privacyCovered ? '#F6F7F9' : (this.colorMode == 0 ? '#171819' : '#ECEDEF'))
+    .onAreaChange((_oldArea: Area, newArea: Area): void => {
+      this.availableWidthVp = Number(newArea.width);
+      this.availableHeightVp = Number(newArea.height);
+    })
+    .onClick(() => {
       // 点击拉起菜单栏功能
       if (this.canReadCurrentBook()) {
         this.isShowSetting = true
@@ -968,6 +1082,9 @@ struct ReaderPage3 {
       .borderRadius(20)
       .position({ bottom: '10%', right: '5%' })
     }
+    .width('100%')
+    .constraintSize({ maxWidth: this.panelWidth() })
+    .height('100%')
   }
 
   @Builder
@@ -983,7 +1100,8 @@ struct ReaderPage3 {
 
   @Builder
   LayoutMoreDialog() {
-    LayoutMoreDialog({ ReaderPadding: this.ReaderPadding }).height(500).width("100%")
+    LayoutMoreDialog({ ReaderPadding: this.ReaderPadding }).height('100%').width('100%')
+      .constraintSize({ maxWidth: this.panelWidth() })
   }
 
   @Builder
@@ -1005,11 +1123,15 @@ struct ReaderPage3 {
         this.deleteFontFlow(option)
       }
     }).width('100%').height('100%')
+      .constraintSize({ maxWidth: this.panelWidth() })
   }
 
   private openFontPicker(): void {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const runtime = this.runtime;
+    if (!runtime || !this.isCurrentRuntime(runtime)) return;
     ReaderFontManager.listFontOptions(context).then((options: ReaderFontOption[]) => {
+      if (!this.isCurrentRuntime(runtime)) return;
       this.fontOptions = options
       this.isShowFontPicker = true
     }).catch((error: BusinessError) => {
@@ -1020,11 +1142,11 @@ struct ReaderPage3 {
 
   /** 应用所选字体：fontPath 交给内核（配合 resourceRequest 字节流），立即持久化 */
   private selectFont(option: ReaderFontOption): void {
+    if (!this.canReadCurrentBook()) return;
     this.readerSetting.fontName = option.name;
     this.readerSetting.fontPath = option.path;
     this.syncFontResourceListener();
-    this.readerComponentController?.setPageConfig(this.readerSetting);
-    PreferencesUtil.putSync(`ReaderSetting_${this.bookData.bookName}`, this.readerSetting)
+    this.readerPreferencesChanged();
   }
 
   /**

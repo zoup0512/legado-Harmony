@@ -48,7 +48,7 @@ export default struct addBookTypeDialog {
           .fontColor(Color.White)
           .backgroundColor(this.theme.mainColor)
       }.padding({top:20,bottom:20})
-    }.width('80%')
+    }.width('80%').constraintSize({ maxWidth: 560 })
   }
   @State translateX: number = 0;
   @Builder inputBookType(){

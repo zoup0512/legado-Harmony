@@ -11,7 +11,7 @@ import { WindowAbility } from '../entryability/WindowAbility'
 import { statusBarContentColorFor } from '../common/utils/ThemeManager'
 import BrightnessUtil from '../../common/utils/BrightnessUtil'
 import PrivacyOnboarding, { PrivacyOnboardingStore } from '../privacy/PrivacyOnboarding'
-import { display } from '@kit.ArkUI'
+import { AdaptiveLayout } from '../common/utils/AdaptiveLayout'
 
 const SHELF_TAB: number = 0
 const PRIVACY_TAB: number = 1
@@ -24,6 +24,12 @@ struct Main {
   @State currentTabIndex: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('windowWidthVp') @Watch('onWindowSizeChanged') windowWidthVp: number = 0
+  @StorageProp('windowHeightVp') @Watch('onWindowSizeChanged') windowHeightVp: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
+  @State layoutWidth: number = 0
+  @State layoutHeight: number = 0
   tabController: TabsController = new TabsController()
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) @Watch('applyStatusBarColor') theme: ThemeItem = {} as ThemeItem
@@ -40,6 +46,7 @@ struct Main {
   onPageHide(): void {
     this.pageVisible = false
     this.cancelOnboardingTimer()
+    this.onboardingVisible = false
     // 其他页面都是浅色背景，离开首页时恢复黑色状态栏文字
     WindowAbility.getInstance().setStatusBarContentColor('#000000', this.getUIContext().getHostContext())
   }
@@ -79,9 +86,21 @@ struct Main {
     }
   }
 
-  // 等书架完成布局后再定位底部“隐私”入口
+  private usesRail(): boolean {
+    return AdaptiveLayout.usesNavigationRail(this.windowWidthVp || this.layoutWidth)
+  }
+
+  private onWindowSizeChanged(): void {
+    // 不保留旧导航位置，也不将仅因旋转/分屏而隐藏的引导标记为已读。
+    this.cancelOnboardingTimer()
+    this.onboardingVisible = false
+    if (this.pageVisible && this.currentTabIndex === SHELF_TAB) this.scheduleOnboarding()
+  }
+
+  // 等书架和底部导航/侧边导航完成布局后再定位隐私入口
   private scheduleOnboarding(): void {
-    if (this.onboardingVisible || this.onboardingTimer !== -1 || !PrivacyOnboardingStore.shouldShow()) return
+    if (!this.pageVisible || this.currentTabIndex !== SHELF_TAB ||
+      this.onboardingVisible || this.onboardingTimer !== -1 || !PrivacyOnboardingStore.shouldShow()) return
     this.onboardingTimer = setTimeout((): void => {
       this.onboardingTimer = -1
       if (!this.pageVisible || this.currentTabIndex !== SHELF_TAB || !PrivacyOnboardingStore.shouldShow()) return
@@ -105,11 +124,13 @@ struct Main {
         return
       }
     } catch (_) {
-      // 取不到组件位置时按底部导航的默认布局估算
+      // 取不到组件位置时只按当前窗口估算，不能使用物理屏幕尺寸
     }
-    const screen = display.getDefaultDisplaySync()
-    this.onboardingX = ui.px2vp(screen.width) / 2
-    this.onboardingY = ui.px2vp(screen.height) - this.bottomRectHeight - 36
+    const width = this.windowWidthVp || this.layoutWidth
+    const height = this.windowHeightVp || this.layoutHeight
+    this.onboardingX = this.usesRail() ? this.leftRectWidth + 40 : width / 2
+    this.onboardingY = this.usesRail() ? (height - this.bottomRectHeight) / 2 :
+      height - this.bottomRectHeight - 36
   }
 
   private closeOnboarding(openPrivacy: boolean): void {
@@ -163,7 +184,7 @@ struct Main {
           .fontColor(this.currentTabIndex === index ? this.theme.mainColor : '#000000')
       }
       .width('100%')
-      .height('100%')
+      .height(this.usesRail() ? 80 : '100%')
       .justifyContent(FlexAlign.Center)
       .accessibilityText('隐私文件夹')
     } else {
@@ -181,7 +202,7 @@ struct Main {
       }
       .width('100%')
       .margin({ top: 4 })
-      .height("100%")
+      .height(this.usesRail() ? 80 : '100%')
     }
   }
 
@@ -196,7 +217,7 @@ struct Main {
       Column() {
         Tabs({
           index: this.currentTabIndex,
-          barPosition: BarPosition.End,
+          barPosition: this.usesRail() ? BarPosition.Start : BarPosition.End,
           controller: this.tabController
         }) {
           ForEach(this.nav, (item: NavItem) => {
@@ -221,10 +242,13 @@ struct Main {
         }
         // 不允许左右滑动切换，避免误滑进隐私页
         .scrollable(false)
+        .vertical(this.usesRail())
+        .barWidth(this.usesRail() ? 80 : '100%')
+        .barHeight(this.usesRail() ? '100%' : 56)
         // 内容区与底部导航之间的分隔线
         .divider({ strokeWidth: 0.5, color: 'rgba(0, 0, 0, 0.12)' })
         .barBackgroundColor(Color.White)
-        .padding({ bottom: this.bottomRectHeight })
+        .padding({ bottom: this.bottomRectHeight, left: this.leftRectWidth, right: this.rightRectWidth })
         .onAnimationStart((index, targetIndex) => {
           this.switchTab(targetIndex)
         })
@@ -240,6 +264,9 @@ struct Main {
         PrivacyOnboarding({
           centerX: this.onboardingX,
           centerY: this.onboardingY,
+          viewportWidth: this.windowWidthVp || this.layoutWidth,
+          viewportHeight: this.windowHeightVp || this.layoutHeight,
+          rail: this.usesRail(),
           onTry: (): void => this.closeOnboarding(true),
           onLater: (): void => this.closeOnboarding(false)
         })
@@ -247,5 +274,14 @@ struct Main {
     }
     .width('100%')
     .height('100%')
+    .onAreaChange((_oldArea: Area, area: Area) => {
+      const width = Number(area.width)
+      const height = Number(area.height)
+      if (width !== this.layoutWidth || height !== this.layoutHeight) {
+        this.layoutWidth = width
+        this.layoutHeight = height
+        this.onWindowSizeChanged()
+      }
+    })
   }
 }

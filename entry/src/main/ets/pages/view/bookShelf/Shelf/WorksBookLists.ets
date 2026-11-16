@@ -6,6 +6,7 @@ import worksBookInfoDialog from '../../dialog/worksBookInfoDialog'
 import WorksBookListInfo from './WorksBookListInfo'
 import worksListsDao from '../../../../database/dao/WorksListsDao'
 import newBookShelf from '../Manage/bookManage/newBookShelf'
+import { AdaptiveLayout } from '../../../../common/utils/AdaptiveLayout'
 
 /**
  * 书单
@@ -18,6 +19,13 @@ export default struct WorksBookLists {
   @Prop worksLists: WorksLists[] = []
   @Prop isShowCheck: boolean = false
   @State worksBook: WorksLists = new WorksLists()
+  @State contentWidth: number = 0
+
+  private gridCoverWidth(): number {
+    return this.contentWidth > 0 ?
+      Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100
+  }
+
   @StorageLink('BOOK_IS_BOOK_WORKS_BOOK_LIST') @Watch('getWorkLists') isWorksBookListRefreshing: number = 0
   onSelect: Function = () => {
   }
@@ -41,24 +49,25 @@ export default struct WorksBookLists {
   build() {
     Column() {
       GridRow({
-        columns: this.EXHIBIT === '宫格' ? 3 : 1
+        columns: this.EXHIBIT === '宫格' ? AdaptiveLayout.shelfColumns(this.contentWidth) : 1
       }) {
         ForEach(this.worksLists, (item: WorksLists, index: number) => {
           GridCol() {
             if (this.EXHIBIT === '宫格') {
               WorksBookListGrid({
                 work: item,
+                coverWidth: this.gridCoverWidth(),
                 isShowCheck: this.isShowCheck,
                 checkGroup: this.checkGroup,
                 onSelect: () => {
                   this.onSelect()
                 }
-              }).width('33%')
+              })
                 .gesture(
                   LongPressGesture({ repeat: false, duration: 500 })
                     .onAction((event: GestureEvent) => {
                         this.worksBook = item
-                        this.shelfInfoDialog?.open()
+                        this.openShelfInfoDialog()
                     }))
                 .onClick(() => {
                     this.worksBook = item
@@ -78,7 +87,7 @@ export default struct WorksBookLists {
                   LongPressGesture({ repeat: false, duration: 500 })
                     .onAction((event: GestureEvent) => {
                       this.worksBook = item
-                      this.shelfInfoDialog?.open()
+                      this.openShelfInfoDialog()
                     }))
                 .onClick(() => {
                   this.worksBook = item
@@ -88,6 +97,10 @@ export default struct WorksBookLists {
           }
         })
       }
+      .width('100%')
+      .onAreaChange((_oldArea: Area, area: Area) => {
+        this.contentWidth = Number(area.width)
+      })
 
       Flex()
         .bindContentCover($$this.isShowEditBook, this.showEditBook(), {
@@ -97,6 +110,7 @@ export default struct WorksBookLists {
           }
         })
     }
+    .width('100%')
   }
 
   @State isShowEditBook: boolean = false
@@ -120,20 +134,26 @@ export default struct WorksBookLists {
     .backgroundColor(Color.White)
   }
 
-  shelfInfoDialog: CustomDialogController | null = new CustomDialogController({
-    builder: worksBookInfoDialog({
-      works: this.worksBook,
-      cancel: () => {
-        this.exitDialog()
-      }
-    }),
-    cancel: this.exitDialog,
-    autoCancel: true,
-    width: '100%',
-    alignment: DialogAlignment.Bottom,
-    customStyle: true
+  shelfInfoDialog: CustomDialogController | null = null
 
-  })
+  private openShelfInfoDialog(): void {
+    // 控制器跟随窗口宽度，主体根组件限宽并居中，分屏时无需关闭弹窗。
+    this.shelfInfoDialog = new CustomDialogController({
+      builder: worksBookInfoDialog({
+        works: this.worksBook,
+        cancel: () => {
+          this.exitDialog()
+        }
+      }),
+      cancel: this.exitDialog,
+      autoCancel: true,
+      width: '100%',
+      alignment: DialogAlignment.Bottom,
+      customStyle: true
+
+    })
+    this.shelfInfoDialog.open()
+  }
 
   //退出弹框
   exitDialog() {

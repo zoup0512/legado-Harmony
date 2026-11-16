@@ -2,6 +2,7 @@ import BookInfoManage from './BookInfoManage'
 import BookInfoGridManage from './BookInfoGridManage'
 import { Books } from '../../../../../database/entities/Books'
 import ThemedEmptyImage from '../../../../../componets/common/ThemedEmptyImage'
+import { AdaptiveLayout } from '../../../../../common/utils/AdaptiveLayout'
 
 @Component
 export default struct bookListManage{
@@ -10,6 +11,12 @@ export default struct bookListManage{
   @Prop isManage:boolean = true
   @Link checkGroup:Record<number, boolean>
   @State delCache:boolean = false
+  @State contentWidth: number = 0
+
+  private gridCoverWidth(): number {
+    return this.contentWidth > 0 ?
+      Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100
+  }
   onSelect:Function = () => {}
   build() {
     if (this.bookList === null || this.bookList.length === 0) {
@@ -25,12 +32,13 @@ export default struct bookListManage{
       ){
         if (this.EXHIBIT === '宫格') {
          GridRow({
-           columns: 3
+           columns: AdaptiveLayout.shelfColumns(this.contentWidth)
          }){
            ForEach(this.bookList, (item: Books,index:number) => {
              GridCol(){
                BookInfoGridManage({
                  bookData:item,
+                 coverWidth: this.gridCoverWidth(),
                  isManage:this.isManage,
                  checkGroup:this.checkGroup,
                  onSelect: ()=>{
@@ -57,6 +65,10 @@ export default struct bookListManage{
           }
         }
       }
+      .width('100%')
+      .onAreaChange((_oldArea: Area, area: Area) => {
+        this.contentWidth = Number(area.width)
+      })
 
     }
   }

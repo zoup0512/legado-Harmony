@@ -24,6 +24,7 @@ import privacyFolderService from '../../../../privacy/PrivacyFolderService';
 import { PRIVACY_BOOK_GROUP } from '../../../../privacy/PrivacyConstants';
 import privacySessionService from '../../../../privacy/PrivacySessionService';
 import { LocalBookAccessLogic } from '../../../../common/utils/LocalBookAccess';
+import { AdaptiveLayout } from '../../../../common/utils/AdaptiveLayout';
 
 class routerParams {
   currentIndex:number
@@ -50,6 +51,7 @@ struct BookManagePage {
   @StorageLink('topRectHeight') topRectHeight: number = 0
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @State isAddShelfShow:boolean = false
+  @State footerWidth: number = 0
   @State topTitle:string = '置顶'
   @State bookList:Books[] = []
   @State checkLists: Record<number, boolean> = {}
@@ -171,7 +173,9 @@ struct BookManagePage {
           }
         })
     }
-    .margin({
+    .width('100%')
+    .height('100%')
+    .padding({
       bottom:this.bottomRectHeight
     })
     .linearGradient({
@@ -228,6 +232,8 @@ struct BookManagePage {
         .align(Alignment.TopStart)
         .scrollBar(BarState.Off)
       }
+      .width('100%')
+      .layoutWeight(1)
       Column(){
         Divider()
         if (this.bookTypeNumber === 5){
@@ -237,6 +243,8 @@ struct BookManagePage {
         }
       }.backgroundColor(Color.White)
     }
+    .width('100%')
+    .height('100%')
   }
   //书单弹窗
   @Builder dialogCatalogAddShelf(){
@@ -368,7 +376,8 @@ struct BookManagePage {
   //底部操作栏
   @Builder footerTitle(){
       GridRow({
-        columns:this.bookTypeNumber===1?5:3,
+        columns: this.footerWidth >= 600 ? 5 :
+          Math.min(this.bookTypeNumber === 1 ? 5 : 3, AdaptiveLayout.shelfColumns(this.footerWidth)),
         gutter: { y: 12 }
       }){
         ForEach(this.bookTypeNumber===1?this.buttonListInfo5:this.buttonListInfo4,(item:buttonList)=>{
@@ -397,6 +406,10 @@ struct BookManagePage {
           }
         })
       }
+      .width('100%')
+      .onAreaChange((_oldArea: Area, area: Area) => {
+        this.footerWidth = Number(area.width)
+      })
       .padding({
         top:10,
         bottom:10

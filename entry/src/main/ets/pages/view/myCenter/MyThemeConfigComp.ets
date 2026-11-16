@@ -10,6 +10,7 @@ export struct MyThemeConfigComp {
   @StorageProp(ThemeStorageKey.THEMEINDEX)
   activeIndex: number = 0 // 被选中的主题
   @State longPressGestureIndex: number = 0 // 长按选中主题
+  @State gridWidth: number = 0
 
   @StorageProp(ThemeStorageKey.THEMELIST)
   themeList: ThemeItem[] = []
@@ -90,7 +91,7 @@ export struct MyThemeConfigComp {
             .position({right: 0, top: 0})
         }
       }
-      .width(154)
+      .width('100%')
       .height(77)
       .borderRadius(8)
       .backgroundColor(item.mainColor)
@@ -101,8 +102,17 @@ export struct MyThemeConfigComp {
         .lineHeight(22)
         .width('100%')
     }
-    .width(154)
+    .width('100%')
     .height(107)
+  }
+
+  private gridColumns(): string {
+    const columns = this.gridWidth > 0 ? Math.max(1, Math.min(4, Math.floor((this.gridWidth + 12) / 166))) : 2
+    let template = '1fr'
+    for (let index = 1; index < columns; index++) {
+      template += ' 1fr'
+    }
+    return template
   }
 
   build() {
@@ -118,7 +128,7 @@ export struct MyThemeConfigComp {
             }
             .alignItems(HorizontalAlign.Center)
             .justifyContent(FlexAlign.Center)
-            .width(154)
+            .width('100%')
             .height(77)
             .borderRadius(8)
             .backgroundColor('#f5f5f5')
@@ -134,7 +144,7 @@ export struct MyThemeConfigComp {
               .lineHeight(22)
               .width('100%')
           }
-          .width(154)
+          .width('100%')
           .height(107)
         }
         ForEach(this.themeList, (item: ThemeItem, index) => {
@@ -154,11 +164,14 @@ export struct MyThemeConfigComp {
           )
         })
       }
-      .columnsTemplate('1fr 1fr')
+      .columnsTemplate(this.gridColumns())
       .columnsGap(12)
       .rowsGap(12)
       .width('100%')
       .height('100%')
+      .onAreaChange((_oldArea: Area, newArea: Area) => {
+        this.gridWidth = Number(newArea.width)
+      })
     }
     .width('100%')
     .height('100%')

@@ -52,23 +52,25 @@ export struct FontPickerPanel {
   }
 
   build() {
-    Column() {
+    List() {
+      ListItem() {
       Text('字体')
         .fontSize(18)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.textColor)
         .margin({ top: 20, bottom: 12 })
+        .width('100%')
+        .textAlign(TextAlign.Center)
+      }
 
-      List() {
         ForEach(this.fontOptions, (option: ReaderFontOption) => {
           ListItem() {
             this.FontOptionRow(option)
           }
         }, (option: ReaderFontOption) => ReaderFontManager.previewFamilyOf(option) || 'system')
-      }
-      .width('100%')
-      .layoutWeight(1)
 
+      // Import remains reachable even when the whole sheet is shorter than the header/footer.
+      ListItem() {
       Row({ space: 8 }) {
         if (this.isImporting) {
           LoadingProgress().width(18).height(18).color(this.textColor)
@@ -97,6 +99,7 @@ export struct FontPickerPanel {
           this.onImport()
         }
       })
+      }
     }
     .width('100%')
     .height('100%')

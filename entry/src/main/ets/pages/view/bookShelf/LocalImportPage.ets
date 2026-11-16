@@ -33,6 +33,9 @@ enum LocalImportSortType {
 struct LocalImportPage {
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
   @StorageLink('topRectHeight') topRectHeight: number = 0
+  @StorageProp('leftRectWidth') leftRectWidth: number = 0
+  @StorageProp('rightRectWidth') rightRectWidth: number = 0
+  @State pageHeight: number = 0
   @StorageLink('BOOK_IS_BOOK_REFRESHING') isBookRefreshing: number = 0
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
   @State bookType: number = (router.getParams() as LocalImportRouteParams)?.bookType ?? 0
@@ -691,38 +694,88 @@ struct LocalImportPage {
     .backgroundColor(Color.White)
   }
 
+  @Builder
+  ImportSources() {
+    Column({ space: 12 }) {
+      this.Header()
+      Search({ value: this.searchValue, placeholder: '搜索文件名', icon: '/common/images/search.svg' })
+        .height(40)
+        .onChange((value: string) => {
+          this.searchValue = value
+        })
+      this.SourceActions()
+      if (this.candidates.length > 0) {
+        this.ScanSummary()
+      }
+    }
+    .width('100%')
+    .padding({ left: 20, right: 20 })
+  }
+
   build() {
     Column() {
-      Column({ space: 12 }) {
-        this.Header()
-        Search({ value: this.searchValue, placeholder: '搜索文件名', icon: '/common/images/search.svg' })
-          .height(40)
-          .onChange((value: string) => {
-            this.searchValue = value
-          })
-        this.SourceActions()
-        if (this.candidates.length > 0) {
-          this.ScanSummary()
+      if (this.pageHeight > 0 && this.pageHeight - this.topRectHeight - this.bottomRectHeight < 600) {
+        // 矮窗下来源选项与文件共用列表滚动，底部操作保持可见。
+        Column() {
+          List({ space: 8 }) {
+            ListItem() {
+              this.ImportSources()
+            }
+            if (this.candidates.length === 0) {
+              ListItem() {
+                Column() {
+                  this.EmptyState()
+                }.width('100%').height(200)
+              }
+            } else {
+              ForEach(this.getVisibleCandidates(), (item: LocalBookImportCandidate) => {
+                ListItem() {
+                  Column() {
+                    this.CandidateItem(item)
+                  }.width('100%').padding({ left: 20, right: 20 })
+                }
+              }, (item: LocalBookImportCandidate) => item.id)
+              if (this.getVisibleCandidates().length === 0) {
+                ListItem() {
+                  Text('没有匹配的书籍').fontSize(14).fontColor('#73000000').padding(24)
+                }
+              }
+            }
+          }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+          if (this.candidates.length > 0) {
+            this.BottomBar()
+          }
         }
-      }
-      .width('100%')
-      .padding({ left: 20, right: 20 })
-
-      if (this.candidates.length === 0) {
-        this.EmptyState()
+        .width('100%')
+        .constraintSize({ maxWidth: 840 })
+        .layoutWeight(1)
       } else {
         Column() {
-          this.CandidateList()
+          this.ImportSources()
+          if (this.candidates.length === 0) {
+            this.EmptyState()
+          } else {
+            Column() {
+              this.CandidateList()
+            }
+            .layoutWeight(1)
+            .width('100%')
+            .padding({ top: 10, left: 20, right: 20 })
+            this.BottomBar()
+          }
         }
-        .layoutWeight(1)
         .width('100%')
-        .padding({ top: 10, left: 20, right: 20 })
-        this.BottomBar()
+        .constraintSize({ maxWidth: 840 })
+        .layoutWeight(1)
       }
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.topRectHeight, bottom: this.bottomRectHeight })
+    .padding({ top: this.topRectHeight, bottom: this.bottomRectHeight,
+      left: this.leftRectWidth, right: this.rightRectWidth })
+    .onAreaChange((_oldArea: Area, newArea: Area) => {
+      this.pageHeight = Number(newArea.height)
+    })
     .backgroundColor('#F6F7F9')
   }
 }

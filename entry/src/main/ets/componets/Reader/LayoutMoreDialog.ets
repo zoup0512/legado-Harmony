@@ -3,6 +3,7 @@ export default struct LayoutMore {
   @Link ReaderPadding: number
 
   build() {
+    Scroll() {
     Column() {
       Row() {
         Text("边距")
@@ -39,11 +40,15 @@ export default struct LayoutMore {
       }
       .width("100%")
     }
-    .height(500)
+    .width('100%')
     .padding({
       left: 20,
       right: 20
     })
+    }
+    .width('100%')
+    .constraintSize({ maxWidth: 560 })
+    .height('100%')
   }
 }
 

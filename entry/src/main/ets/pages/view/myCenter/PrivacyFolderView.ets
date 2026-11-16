@@ -10,6 +10,7 @@ import { ThemeStorageKey } from '../../../common/constants/Theme';
 import { ThemeItem } from '../../../common/model/Theme';
 import BookInfos from '../bookShelf/components/BookInfos';
 import BookInfoGrids from '../bookShelf/components/BookInfoGrids';
+import { AdaptiveLayout } from '../../../common/utils/AdaptiveLayout';
 
 /**
  * 隐私文件夹内容。既用于独立页面（PrivacyFolder），也用于首页底部的“隐私”Tab。
@@ -37,6 +38,12 @@ export default struct PrivacyFolderView {
   @State biometricType: PrivacyBiometricType = PrivacyBiometricType.NONE;
   @State credentialError: string = '';
   @State EXHIBIT: string = '列表';
+  @State contentWidth: number = 0;
+
+  private gridCoverWidth(): number {
+    return this.contentWidth > 0 ?
+      Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100;
+  }
   @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>();
   @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch('onShelfChanged') isBookRefreshing: number = 0;
   private unsubscribe: (() => void) | undefined;
@@ -257,31 +264,40 @@ export default struct PrivacyFolderView {
             .onClick((): void => { this.unlock(); })
         }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
       } else if (!this.unlocked) {
-        Column({ space: 18 }) {
-          Image($r('sys.symbol.lock')).width(56).height(56).fillColor(this.theme.mainColor)
-          Text('私人阅读，独立保存').fontSize(20).fontWeight(FontWeight.Medium)
-          Text(this.lockedHint())
-            .fontSize(14).fontColor('#777777')
-          Column({ space: 6 }) {
-            Text('· 优先使用指纹 / 人脸，未录入时使用六位密码').fontSize(13).fontColor('#555555')
-            Text('· 离开应用即自动上锁').fontSize(13).fontColor('#555555')
-            Text('· 不出现在普通书架中').fontSize(13).fontColor('#555555')
-          }.alignItems(HorizontalAlign.Start)
-          if (!this.biometricReady && this.credentialKnown && !this.configured) {
-            Text('如有旧隐私书，需先验证原指纹或人脸；不可用时保留数据，不能直接接管。')
-              .fontSize(12).fontColor('#777777').textAlign(TextAlign.Center)
+        Scroll() {
+          Column({ space: 18 }) {
+            Image($r('sys.symbol.lock')).width(56).height(56).fillColor(this.theme.mainColor)
+            Text('私人阅读，独立保存').fontSize(20).fontWeight(FontWeight.Medium)
+            Text(this.lockedHint())
+              .fontSize(14).fontColor('#777777')
+            Column({ space: 6 }) {
+              Text('· 优先使用指纹 / 人脸，未录入时使用六位密码').fontSize(13).fontColor('#555555')
+              Text('· 离开应用即自动上锁').fontSize(13).fontColor('#555555')
+              Text('· 不出现在普通书架中').fontSize(13).fontColor('#555555')
+            }.alignItems(HorizontalAlign.Start)
+            if (!this.biometricReady && this.credentialKnown && !this.configured) {
+              Text('如有旧隐私书，需先验证原指纹或人脸；不可用时保留数据，不能直接接管。')
+                .fontSize(12).fontColor('#777777').textAlign(TextAlign.Center)
+            }
+            if (!this.biometricReady && this.credentialError.length > 0) {
+              Text(this.credentialError).fontSize(13).fontColor('#B84A36').textAlign(TextAlign.Center)
+              Button('重新读取凭据').onClick((): void => { this.refreshCredentialStatus(); })
+            } else {
+              Button(this.unlockLabel()).width('80%').backgroundColor(this.theme.mainColor)
+                .enabled(!this.busy && (this.biometricReady || this.credentialKnown))
+                .onClick((): void => { this.unlock(); })
+            }
+            Text('仅保护应用内副本，系统目录中的原文件不会被删除')
+              .fontSize(12).fontColor('#999999').textAlign(TextAlign.Center)
           }
-          if (!this.biometricReady && this.credentialError.length > 0) {
-            Text(this.credentialError).fontSize(13).fontColor('#B84A36').textAlign(TextAlign.Center)
-            Button('重新读取凭据').onClick((): void => { this.refreshCredentialStatus(); })
-          } else {
-            Button(this.unlockLabel()).width('80%').backgroundColor(this.theme.mainColor)
-              .enabled(!this.busy && (this.biometricReady || this.credentialKnown))
-              .onClick((): void => { this.unlock(); })
-          }
-          Text('仅保护应用内副本，系统目录中的原文件不会被删除')
-            .fontSize(12).fontColor('#999999').textAlign(TextAlign.Center)
-        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
+          .width('100%')
+          .constraintSize({ maxWidth: 560 })
+          .padding({ top: 16, bottom: 16 })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .align(Alignment.Center)
+        .scrollBar(BarState.Auto)
       } else {
         Search({ value: this.searchKey, placeholder: '搜索私密书籍' })
           .onChange((value: string): void => { this.searchKey = value; this.loadBooks(); })
@@ -303,22 +319,30 @@ export default struct PrivacyFolderView {
             Text('暂无私密书籍').fontColor('#888888')
           }.layoutWeight(1).margin({ top: 40 })
         } else {
-          List({ space: 10 }) {
-            ForEach(this.books, (book: Books) => {
-              ListItem() {
-                if (this.EXHIBIT === '宫格') {
-                  BookInfoGrids({ book: book })
-                } else {
-                  BookInfos({ book: book })
+          Column() {
+            List({ space: 10 }) {
+              ForEach(this.books, (book: Books) => {
+                ListItem() {
+                  if (this.EXHIBIT === '宫格') {
+                    BookInfoGrids({ book: book, coverWidth: this.gridCoverWidth() })
+                  } else {
+                    BookInfos({ book: book })
+                  }
                 }
-              }
-            })
+              })
+            }
+            .alignListItem(ListItemAlign.Center)
+            .layoutWeight(1)
+            .width(this.EXHIBIT === '宫格' || this.contentWidth <= 0 ? '100%' : AdaptiveLayout.contentWidth(this.contentWidth))
+            .lanes(this.EXHIBIT === '宫格' ? AdaptiveLayout.shelfColumns(this.contentWidth) : 1)
+            .scrollBar(BarState.Off)
           }
-          .alignListItem(ListItemAlign.Center)
+          .width('100%')
           .layoutWeight(1)
-          .lanes(this.EXHIBIT === '宫格' ? 3 : 1)
-          .scrollBar(BarState.Off)
-          .margin(this.EXHIBIT === '宫格' ? { left: -10, right: -10 } : { left: -16, right: -16 })
+          .alignItems(HorizontalAlign.Center)
+          .onAreaChange((_oldArea: Area, area: Area) => {
+            this.contentWidth = Number(area.width);
+          })
         }
       }
   }

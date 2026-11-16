@@ -54,6 +54,7 @@ export default struct commonInputDialog {
     }
     .padding({left:PaddingConstants.PADDING_20,right:PaddingConstants.PADDING_20})
     .backgroundColor(Color.White)
+    .constraintSize({ maxWidth: 560 })
   }
   //输入框提示
   @Prop placeholder:string = '请输入内容'
