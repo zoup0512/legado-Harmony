@@ -380,6 +380,11 @@ struct LocalImportPage {
       }
       const target = targetPrivacy ? '隐私文件夹' : '书架'
       showMessage(`已导入${target}：成功 ${result.imported}，重复 ${result.duplicate}，失败 ${result.failed}，取消 ${result.cancelled}`, 2500)
+      if (!targetPrivacy && result.imported > 0 && result.failed === 0 && result.cancelled === 0 &&
+        !this.cancelRequested) {
+        AppStorage.setOrCreate('RETURN_TO_BOOKSHELF', true)
+        router.back({ url: 'pages/Index' })
+      }
     } catch (_) {
       showMessage('批量导入未完成，请查看列表状态')
     } finally {
