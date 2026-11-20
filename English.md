@@ -21,7 +21,7 @@ An open-source local ebook reader for HarmonyOS.
 
 The HarmonyOS application only reads local files. It does not provide built-in ebook sources, source imports, online book search, discovery, web scraping, RSS subscriptions, server bookshelves, WebDAV or a web source editor. It does not request Internet permission.
 
-The update entry in About opens the system app store only when selected by the user; the application does not download books or scrape content.
+Selecting User Rating in the profile tab opens the system app store.
 
 ### Import and read
 

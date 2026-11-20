@@ -7,6 +7,8 @@ import dataBase from '../../../main/ets/database';
 import appDatabaseUtil from '../../../main/ets/database/AppDatabaseUtil';
 import { Books } from '../../../main/ets/database/entities/Books';
 import bookGroupsDao from '../../../main/ets/database/dao/BookGroupsDao';
+import booksDao from '../../../main/ets/database/dao/BooksDao';
+import { BooksTypeSearchParams } from '../../../main/ets/database/types/BooksType';
 
 let storeSequence: number = 0;
 
@@ -105,6 +107,38 @@ export default function databaseInitTest() {
       expect(books[0].durChapterPos).assertEqual(123);
       expect(books[0].durChapterTime).assertEqual(1000);
       expect(books[0].isTop).assertTrue();
+    });
+
+    it('shelfSearchFallsBackToLatestReadAndPreservesKnownOrders', 0, async () => {
+      const store = await openMemoryStore();
+      await dataBase.initAllTable();
+      // Each sort yields a different ID order, and the pinned book sorts first in every mode.
+      await store.executeSql(`INSERT INTO books
+        (id, bookName, isTop, durChapterTime, latestChapterTime, sort, createTime) VALUES
+        (1, 'most recently read', 0, 300, 100, 2, 100),
+        (2, 'most recently updated', 0, 200, 300, 3, 200),
+        (3, 'most recently created', 0, 100, 200, 1, 300),
+        (4, 'pinned book', 1, 0, 0, 4, 0)`);
+      const columns = appDatabaseUtil.getColumn('books');
+      const readShelf = (): Promise<Books[]> => dbUtil.querySqlForList<Books>('SELECT * FROM books ORDER BY id', columns);
+      const before = await readShelf();
+      expect(before.length).assertEqual(4);
+
+      const expectOrder = async (ids: number[], params?: BooksTypeSearchParams): Promise<void> => {
+        const books = await booksDao.search(params);
+        expect(books.map((book: Books) => book.id).join(',')).assertEqual(ids.join(','));
+        const firstPage = await booksDao.searchPage(params, 1, 2);
+        expect(firstPage.map((book: Books) => book.id).join(',')).assertEqual(ids.slice(0, 2).join(','));
+        const secondPage = await booksDao.searchPage(params, 2, 2);
+        expect(secondPage.map((book: Books) => book.id).join(',')).assertEqual(ids.slice(2).join(','));
+      };
+
+      await expectOrder([4, 1, 2, 3], { order: 'unknown order' });
+      await expectOrder([4, 1, 2, 3], { order: '最近阅读' });
+      await expectOrder([4, 2, 3, 1], { order: '更新排序' });
+      await expectOrder([4, 3, 1, 2], { order: '手动排序' });
+      await expectOrder([4, 3, 2, 1]);
+      expect(JSON.stringify(await readShelf())).assertEqual(JSON.stringify(before));
     });
   });
 }

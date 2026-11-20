@@ -11,14 +11,6 @@
     {
       "name": "EntryAbility_label",
       "value": "隐私阅读器"
-    },
-    {
-      "name": "retry",
-      "value": "retry"
-    },
-    {
-      "name": "clear_recently_used",
-      "value": "clear recently used"
     }
   ]
 }

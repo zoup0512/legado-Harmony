@@ -1,4 +1,3 @@
-import confirmDialogExample from '../../../../componets/common/confirmDialog'
 import { Books } from '../../../../database/entities/Books'
 import { router } from '@kit.ArkUI'
 import BookInfoDialogs from './dialog/BookInfoDialogs'
@@ -20,38 +19,6 @@ export default struct BookInfoGrids{
 
   @Prop book:Books
   @Prop coverWidth: number = 100
-
-  onDelete: () => void = () => {
-
-  }
-  @State delCache:boolean = false
-  //弹窗
-  bookInfoDel: CustomDialogController | null = new CustomDialogController({
-    builder: confirmDialogExample({
-      cancel: ()=> { this.onCancel() },
-      confirm: ()=> { this.onAccept() },
-      delCache:this.delCache,
-      isShowCache:true
-    }),
-    cancel: this.exitApp,
-    autoCancel: true,
-    alignment: DialogAlignment.Center,
-    // offset: { dx: 0, dy: '-40%' },
-    gridCount: 4,
-    customStyle: false,
-    cornerRadius: 25,
-  })
-
-  onCancel() {
-  }
-
-  onAccept() {
-    this.onDelete()
-  }
-
-  exitApp() {
-  }
-
 
   build() {
     Column({

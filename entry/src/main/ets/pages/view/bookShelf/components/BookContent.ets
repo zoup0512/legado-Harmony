@@ -1,5 +1,4 @@
 import { ThemeStorageKey } from '../../../../common/constants/Theme'
-import BasicDataSource from '../../../../common/LazyIDataSource/BasicDataSource'
 import { ThemeItem } from '../../../../common/model/Theme'
 import booksDao from '../../../../database/dao/BooksDao'
 import { Books } from '../../../../database/entities/Books'
@@ -19,7 +18,6 @@ export default struct BookContent {
       Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100
   }
   @StorageLink('bottomRectHeight') bottomRectHeight: number = 0
-  @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>()
 
   async aboutToAppear(): Promise<void> {
     this.getBookCount()
@@ -43,9 +41,6 @@ export default struct BookContent {
   @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch("isRefresh")isBookRefreshing: number = 0
   async isRefresh(): Promise<void> {
     this.currentPage = 1
-    // if (this.booksDataSource.totalCount() > 0){
-    //   this.booksDataSource.clear()
-    // }
     if (this.isBookRefreshing >= 0) {
       await Promise.all([this.getBookCount(), this.getBookList()])
     }
@@ -65,9 +60,6 @@ export default struct BookContent {
       if (this.bookCount === 0){
         this.getBookCount()
       }
-      // if (this.booksDataSource.totalCount() > 0) {
-      //   this.booksDataSource.clear()
-      // }
       this.getBookList()
     }
   }
@@ -79,9 +71,6 @@ export default struct BookContent {
       order:this.searchValue
     }, this.currentPage)
     this.backfillCovers()
-    if (this.booksDataSource.totalCount() < this.bookCount) {
-      // this.booksDataSource.pushAllData(this.bookList)
-    }
   }
 
   @State isLoading: boolean = false

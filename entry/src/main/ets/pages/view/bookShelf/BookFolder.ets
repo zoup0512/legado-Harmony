@@ -1,7 +1,4 @@
-import { it } from '@ohos/hypium'
 import BookOverlay from '../../../componets/bookDetail/BookOverlay'
-import { showMessage } from '../../../componets/common/promptShow'
-import { folderList } from '../../../componets/dataList/folderList'
 import BookGroupsDao from '../../../database/dao/BookGroupsDao'
 import { BookGroups } from '../../../database/entities/BookGroups'
 import BookManageDialog from './components/dialog/BookManageDialog'

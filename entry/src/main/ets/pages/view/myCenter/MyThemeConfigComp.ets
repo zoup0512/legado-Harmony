@@ -1,8 +1,7 @@
-import { ThemeColor, ThemeStorageKey } from '../../../common/constants/Theme'
+import { ThemeStorageKey } from '../../../common/constants/Theme'
 import { ThemeItem } from '../../../common/model/Theme'
-import { promptAction, PromptAction, router } from '@kit.ArkUI'
+import { promptAction, router } from '@kit.ArkUI'
 import { themeManager } from '../../../common/utils/ThemeManager'
-import { JSON } from '@kit.ArkTS'
 
 // 个性主题组件模块
 @Component

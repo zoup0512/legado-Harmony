@@ -3,8 +3,6 @@ import { ThemeItem } from '../../common/model/Theme'
 import BookGroupsDao from '../../database/dao/BookGroupsDao'
 import { BookGroups } from '../../database/entities/BookGroups'
 import BookManageDialog from '../../pages/view/bookShelf/components/dialog/BookManageDialog'
-import { showMessage } from '../common/promptShow'
-
 
 @Component
 export default struct groupTypeSearchPanel{

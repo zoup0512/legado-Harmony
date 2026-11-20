@@ -7,12 +7,9 @@ import { AdaptiveLayout } from '../common/utils/AdaptiveLayout';
 export class WindowAbility {
   private static readonly INSTANCE: WindowAbility = new WindowAbility();
   private context: common.UIAbilityContext | null = null;
-  private windowStage: window.WindowStage | null = null;
   private windowClass: window.Window | null = null;
   private sizeCallback: Callback<window.Size> | undefined;
   private avoidCallback: Callback<window.AvoidAreaOptions> | undefined;
-  private sizeSubscribers: Map<number, () => void> = new Map();
-  private nextSubscriberId: number = 0;
 
   private constructor() {
   }
@@ -25,14 +22,6 @@ export class WindowAbility {
     this.context = context;
   }
 
-  setWindowStage(windowStage: window.WindowStage): void {
-    this.windowStage = windowStage;
-  }
-
-  getWindowStage(): window.WindowStage | null {
-    return this.windowStage;
-  }
-
   initWindow(mainWindow: window.Window): void {
     this.disposeWindow();
     this.windowClass = mainWindow;
@@ -41,7 +30,6 @@ export class WindowAbility {
       if (this.windowClass !== mainWindow) return;
       this.publishWindowSize(size.width, size.height);
       this.refreshAvoidArea();
-      this.sizeSubscribers.forEach((callback: () => void): void => callback());
     };
     this.avoidCallback = (_data: window.AvoidAreaOptions): void => {
       if (this.windowClass === mainWindow) this.refreshAvoidArea();
@@ -103,12 +91,6 @@ export class WindowAbility {
     }
   }
 
-  onWindowSizeChange(callback: () => void): () => void {
-    const id = this.nextSubscriberId++;
-    this.sizeSubscribers.set(id, callback);
-    return (): void => { this.sizeSubscribers.delete(id); };
-  }
-
   disposeWindow(): void {
     if (this.windowClass) {
       try {
@@ -121,12 +103,10 @@ export class WindowAbility {
     this.sizeCallback = undefined;
     this.avoidCallback = undefined;
     this.windowClass = null;
-    this.sizeSubscribers.clear();
   }
 
   releaseWindowStage(): void {
     this.disposeWindow();
-    this.windowStage = null;
   }
 
   async setWindowLayoutFullScreen(isFullScreen: boolean): Promise<void> {

@@ -164,8 +164,9 @@ class booksUtils{
   }
 
   //校验类型数据查询数组内容
-  getOrder(type:string){
-    return BOOK_SEARCH_TYPE.indexOf(type) ?? 0;
+  getOrder(type: string): number {
+    const index = BOOK_SEARCH_TYPE.indexOf(type);
+    return index === -1 ? 0 : index;
   }
 }
 let booksUtil = new booksUtils();

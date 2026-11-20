@@ -1,11 +1,10 @@
 import { display, promptAction, router } from '@kit.ArkUI';
-import LayoutMoreDialog from '../../../componets/Reader/LayoutMoreDialog';
 import { bookParser, readerCore, ReadPageComponent } from '@kit.ReaderKit';
 import bookCoverBackfill from '../../../common/utils/BookCoverBackfill';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import Logger from '../../../common/utils/Logger';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { ClickUtil, PreferencesUtil } from '@pura/harmony-utils';
+import { PreferencesUtil } from '@pura/harmony-utils';
 import { Books } from '../../../database/entities/Books';
 import { WindowAbility } from '../../../entryability/WindowAbility';
 import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
@@ -56,16 +55,13 @@ struct ReaderPage3 {
   @StorageProp('rightRectWidth') rightRectWidth: number = 0
   // 主题颜色
   @StorageProp(ThemeStorageKey.THEME) theme: ThemeItem = {} as ThemeItem
-  @State ReaderPadding: number = 24 // 边距
   @State isShowSetting: boolean = false
   @State isShowContentSetting: boolean = false
-  @State isShowMoreLayout: boolean = false
   @State isShowFontPicker: boolean = false //字体选择面板
   @State fontOptions: ReaderFontOption[] = [] //可选字体列表
   @State isImportingFont: boolean = false //字体导入中
   @State isLuminanceFollowSystem: boolean = false //亮度跟随系统
   @State isScreenState: boolean = false //屏幕是否常亮
-  @State ParagraphSpacing: number = -2
   //书籍解析用数据
   @State bookData: Books = new Books(); //书籍数据
   @State CatalogList: BasicDataSource<bookParser.CatalogItem> = new BasicDataSource<bookParser.CatalogItem>(); //章节数据
@@ -255,7 +251,6 @@ struct ReaderPage3 {
     this.viewport.dispose();
     this.resolveSurfaceReady = undefined;
     this.isShowFontPicker = false;
-    this.isShowMoreLayout = false;
     const runtime = this.runtime;
     this.runtime = undefined;
     this.readerComponentController = undefined;
@@ -799,18 +794,6 @@ struct ReaderPage3 {
                       this.readerSetting.lineHeight = value
                       this.readerPreferencesChanged();
                     })
-                  /*Row() {
-                    Button('更多').bindSheet($$this.isShowMoreLayout, this.LayoutMoreDialog(), {
-                      height: 500,
-                      showClose: false,
-                      dragBar: false,
-                      blurStyle: BlurStyle.COMPONENT_ULTRA_THIN,
-                      onDisappear: () => { // this.clickBookType = ''
-                      }
-                    }).onClick(() => {
-                      this.isShowMoreLayout = true
-                    })
-                  }*/
                 }
 
                 Row({ space: 16 }) {
@@ -1085,23 +1068,6 @@ struct ReaderPage3 {
     .width('100%')
     .constraintSize({ maxWidth: this.panelWidth() })
     .height('100%')
-  }
-
-  @Builder
-  DialogString() {
-    Row() {
-      Text("喜欢就加入书架吧").lineHeight(22).font({
-        size: 14, weight: 400
-      }).fontColor($r("app.string.color_black_45"))
-    }.margin({
-      top: 12, bottom: 16
-    })
-  }
-
-  @Builder
-  LayoutMoreDialog() {
-    LayoutMoreDialog({ ReaderPadding: this.ReaderPadding }).height('100%').width('100%')
-      .constraintSize({ maxWidth: this.panelWidth() })
   }
 
   @Builder

@@ -36,7 +36,6 @@ export default class EntryAbility extends UIAbility {
     DbUtil.initDB(this.context).then(() => {
       DataBase.initAllTable()
     })
-    WindowAbility.getInstance().setWindowStage(windowStage);
     AppStorage.setOrCreate('pathDir', this.context.filesDir);
     Logger.debug('Ability onWindowStageCreate');
     this.loadApplicationContent(windowStage);

@@ -58,8 +58,6 @@ struct BookDetailPage {
   @StorageProp('rightRectWidth') rightRectWidth: number = 0
   @State isShow: boolean = true;
   @State currentIndex: number = 0;
-  // 是否加入书架
-  @State isAddBookShelf: boolean = false;
   @State bookData: Books = new Books()
   @State catalogLoading: boolean = true
   @State catalogError: string = ''
@@ -92,7 +90,6 @@ struct BookDetailPage {
 
   onPageShow() {
     this.pageActive = true
-    this.logAccessLifecycle('show')
     if (this.pageReady) {
       this.refreshDetailAccess()
     }
@@ -103,7 +100,6 @@ struct BookDetailPage {
     this.pageActive = false
     this.invalidateDetailAccess(true)
     this.autoUnlock?.reconcile()
-    this.logAccessLifecycle('hide')
   }
 
   aboutToDisappear() {
@@ -114,13 +110,11 @@ struct BookDetailPage {
     this.invalidateDetailAccess(true)
     this.unsubscribePrivacy?.()
     this.unsubscribePrivacy = undefined
-    this.logAccessLifecycle('disappear')
   }
 
   async aboutToAppear() {
     this.pageActive = true
     this.isShow = false
-    this.logAccessLifecycle('appear')
     this.autoUnlock = new PrivateBookAutoUnlock(privacyForeground, {
       snapshot: (): PrivateBookUnlockSnapshot => ({
         active: this.pageActive,
@@ -141,7 +135,6 @@ struct BookDetailPage {
     })
     this.unsubscribePrivacy = privacySessionService.onStateChanged((locked: boolean) => {
       this.invalidateDetailAccess(locked)
-      this.logAccessLifecycle('session')
       if (this.pageActive && this.pageReady && (!locked || this.ownership !== BookOwnership.PRIVATE)) {
         this.refreshDetailAccess()
       }
@@ -175,9 +168,6 @@ struct BookDetailPage {
         this.privacyGeneration, privacySessionService.getGeneration())
   }
 
-  private logAccessLifecycle(event: string) {
-  }
-
   private invalidateDetailAccess(lockPrivate: boolean) {
     if (lockPrivate && this.ownership === BookOwnership.PRIVATE) {
       this.coverPrivateDetail()
@@ -202,7 +192,6 @@ struct BookDetailPage {
     this.CatalogList = []
     this.catalogReady = false
     this.dialogController.close()
-    this.logAccessLifecycle('private-covered')
     this.autoUnlock?.reconcile()
   }
 
@@ -220,13 +209,11 @@ struct BookDetailPage {
     this.accessFailed = false
     this.privacyError = ''
     this.isShow = false
-    this.logAccessLifecycle('refresh-start')
     try {
       const required = await BooksDao.isPrivateBook(this.bookData)
       if (!this.isCurrentAccessRequest(requestId, generation)) return false
       this.ownership = BookAccessState.fromPrivate(required)
       this.privacyGeneration = generation
-      this.logAccessLifecycle('refresh-verified')
       if (this.ownership === BookOwnership.PRIVATE && !privacySessionService.isUnlocked()) {
         this.coverPrivateDetail()
         return false
@@ -252,7 +239,6 @@ struct BookDetailPage {
         this.accessFailed = true
         this.privacyError = '无法确认书籍访问权限，请重新检查或返回后重试'
         this.isShow = false
-        this.logAccessLifecycle('refresh-failed')
       }
       return false
     } finally {
@@ -261,7 +247,6 @@ struct BookDetailPage {
         if (this.privacyCovered && !this.privacyError && this.accessFailed) {
           this.privacyError = '请重新检查书籍访问权限'
         }
-        this.logAccessLifecycle('refresh-finished')
       }
       this.autoUnlock?.reconcile()
     }
@@ -311,7 +296,6 @@ struct BookDetailPage {
       if (!this.isCurrentAccessRequest(requestId, generation)) return
       this.ownership = BookAccessState.fromPrivate(required)
       this.privacyGeneration = generation
-      this.logAccessLifecycle('reader-verified')
       if (this.ownership === BookOwnership.PRIVATE && !privacySessionService.isUnlocked()) {
         this.coverPrivateDetail()
         return
@@ -323,7 +307,6 @@ struct BookDetailPage {
         this.accessFailed = true
         this.privacyError = '无法确认书籍访问权限，请重新检查或返回后重试'
         this.invalidateDetailAccess(false)
-        this.logAccessLifecycle('reader-check-failed')
       }
       return
     }
@@ -340,7 +323,6 @@ struct BookDetailPage {
       return
     }
     if (!this.isCurrentAccessRequest(requestId, generation) || !this.canShowDetail()) return
-    this.logAccessLifecycle('reader-open')
     router.pushUrl({
       url: 'pages/view/Reader/ReaderPage3',
       params: { bookData: this.bookData, clickBookCatalogId: catalogId }
@@ -354,7 +336,6 @@ struct BookDetailPage {
     const added = await booksUtil.addBooks(this.bookData)
     if (!added || !this.canShowDetail() || generation !== privacySessionService.getGeneration()) return
     this.dialogController.open();
-    this.isAddBookShelf = true; // 1s后关闭dialog
     setTimeout(() => {
       this.isBookRefreshing++
       this.dialogController.close();

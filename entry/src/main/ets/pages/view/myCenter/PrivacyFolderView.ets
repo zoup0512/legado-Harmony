@@ -5,7 +5,6 @@ import privacySessionService, { PrivacyBiometricType } from '../../../privacy/Pr
 import privacyCredentialService from '../../../privacy/PrivacyCredentialService';
 import Header from '../../../componets/common/Header';
 import TabPageTitle from '../../../componets/common/TabPageTitle';
-import BasicDataSource from '../../../common/LazyIDataSource/BasicDataSource';
 import { ThemeStorageKey } from '../../../common/constants/Theme';
 import { ThemeItem } from '../../../common/model/Theme';
 import BookInfos from '../bookShelf/components/BookInfos';
@@ -44,7 +43,6 @@ export default struct PrivacyFolderView {
     return this.contentWidth > 0 ?
       Math.max(1, Math.min(100, this.contentWidth / AdaptiveLayout.shelfColumns(this.contentWidth) - 16)) : 100;
   }
-  @Provide('booksDataSource') booksDataSource: BasicDataSource<Books> = new BasicDataSource<Books>();
   @StorageLink('BOOK_IS_BOOK_REFRESHING') @Watch('onShelfChanged') isBookRefreshing: number = 0;
   private unsubscribe: (() => void) | undefined;
   private active: boolean = false;
@@ -125,7 +123,6 @@ export default struct PrivacyFolderView {
   private clearBooks(): void {
     this.loadRequestId++;
     this.books = [];
-    this.booksDataSource.clear();
   }
 
   private clearLockedState(): void {
@@ -201,8 +198,6 @@ export default struct PrivacyFolderView {
       if (!this.active || !this.visible || requestId !== this.loadRequestId ||
         generation !== privacySessionService.getGeneration() || !privacySessionService.isUnlocked()) return;
       this.books = books;
-      this.booksDataSource.clear();
-      this.booksDataSource.pushAllData(books);
     } catch (_) {
       if (!this.active || !this.visible || requestId !== this.loadRequestId ||
         generation !== privacySessionService.getGeneration()) return;
