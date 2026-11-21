@@ -13,12 +13,32 @@
           "storeFile": "C:\\Users\\vyron\\.ohos\\config\\default_legado-Harmony_CEJEe3Y71qS5u7o83TmpvmDY-r_f7Ir8wbUdinOc8bw=.p12",
           "storePassword": "0000001BA41E1A6065930800A000925BDFF1CC3023BF2BB89978584CDD250CC6682B5B8763F019A99CE0EF"
         }
+      },
+      {
+        "name": "release",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "keystore/release/cool-cube_app.cer",
+          "keyAlias": "releasekey",
+          "keyPassword": "0000001aa954b5e9e47700aa2a1ae840ca0c170306d3d4c3e0b79aa3ba3a562aede3ec8f51653ac5fd47",
+          "profile": "keystore/release/profile_readerRelease.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "keystore/release/CoolCube.p12",
+          "storePassword": "0000001aa954b5e9e47700aa2a1ae840ca0c170306d3d4c3e0b79aa3ba3a562aede3ec8f51653ac5fd47"
+        }
       }
     ],
     "products": [
       {
         "name": "default",
         "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.4(16)",
+        "runtimeOS": "HarmonyOS",
+        "targetSdkVersion": "26.0.0"
+      },
+      {
+        "name": "release",
+        "signingConfig": "release",
         "compatibleSdkVersion": "5.0.4(16)",
         "runtimeOS": "HarmonyOS",
         "targetSdkVersion": "26.0.0"
@@ -33,7 +53,8 @@
         {
           "name": "default",
           "applyToProducts": [
-            "default"
+            "default",
+            "release"
           ]
         }
       ]
